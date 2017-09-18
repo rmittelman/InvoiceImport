@@ -39,6 +39,8 @@
             this.txtPDFFolder = new System.Windows.Forms.TextBox();
             this.btnFindFolder = new System.Windows.Forms.Button();
             this.label3 = new System.Windows.Forms.Label();
+            this.label4 = new System.Windows.Forms.Label();
+            this.btnQuickBooks = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // label1
@@ -152,11 +154,35 @@
             this.label3.TabIndex = 8;
             this.label3.Text = "Save PDF Files to";
             // 
+            // label4
+            // 
+            this.label4.AutoSize = true;
+            this.label4.Location = new System.Drawing.Point(462, 117);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(157, 13);
+            this.label4.TabIndex = 12;
+            this.label4.Text = "Add Vendor Bills to QuickBooks";
+            // 
+            // btnQuickBooks
+            // 
+            this.btnQuickBooks.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnQuickBooks.Font = new System.Drawing.Font("Wingdings 3", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(2)));
+            this.btnQuickBooks.Location = new System.Drawing.Point(622, 113);
+            this.btnQuickBooks.Name = "btnQuickBooks";
+            this.btnQuickBooks.Size = new System.Drawing.Size(21, 21);
+            this.btnQuickBooks.TabIndex = 11;
+            this.btnQuickBooks.Text = "}";
+            this.btnQuickBooks.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageAboveText;
+            this.btnQuickBooks.UseVisualStyleBackColor = true;
+            this.btnQuickBooks.Click += new System.EventHandler(this.btnQuickBooks_Click);
+            // 
             // frmImport
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(687, 135);
+            this.ClientSize = new System.Drawing.Size(687, 164);
+            this.Controls.Add(this.label4);
+            this.Controls.Add(this.btnQuickBooks);
             this.Controls.Add(this.txtPDFFolder);
             this.Controls.Add(this.btnFindFolder);
             this.Controls.Add(this.label3);
@@ -189,6 +215,8 @@
         private System.Windows.Forms.TextBox txtPDFFolder;
         private System.Windows.Forms.Button btnFindFolder;
         private System.Windows.Forms.Label label3;
+        private System.Windows.Forms.Label label4;
+        private System.Windows.Forms.Button btnQuickBooks;
     }
 }
 

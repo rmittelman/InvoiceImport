@@ -128,6 +128,10 @@
       <Project>{dd399a67-668d-4e37-adcb-6c0e9ed193ab}</Project>
       <Name>Aimm.Logging</Name>
     </ProjectReference>
+    <ProjectReference Include="..\QuickBooks\QuickBooks.csproj">
+      <Project>{32F364BA-B3EC-4421-947B-D0ED054A3036}</Project>
+      <Name>QuickBooks</Name>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <COMReference Include="Microsoft.Office.Core">
