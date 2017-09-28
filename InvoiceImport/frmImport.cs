@@ -82,7 +82,7 @@ namespace InvoiceImport
         string archivePath = Properties.Settings.Default.ArchiveFolder;
         string errorPath = Properties.Settings.Default.ErrorFolder;
         string logPath = Properties.Settings.Default.LogFolder;
-        string pdfPath = Properties.Settings.Default.PdfFolder;
+        string pdfDestPath = Properties.Settings.Default.PdfFolder;
         bool showExcel = (bool)Properties.Settings.Default.ShowExcel;
         string apAcct = Properties.Settings.Default.APAcct;
         string billClass = Properties.Settings.Default.BillClass;
@@ -135,7 +135,7 @@ namespace InvoiceImport
 
         }
 
-        // to monitor log
+        // this code is to monitor log, not currently being used
         //private void txtLog_TextChanged(object sender, EventArgs e)
         //{
 
@@ -174,7 +174,7 @@ namespace InvoiceImport
             using(FolderBrowserDialog fbd = new FolderBrowserDialog())
             {
                 fbd.Description = "Select the folder to save PDF files to.";
-                fbd.SelectedPath = pdfPath;
+                fbd.SelectedPath = pdfDestPath;
                 if(fbd.ShowDialog() == DialogResult.OK)
                 {
                     txtPDFFolder.Text = fbd.SelectedPath;
@@ -204,6 +204,7 @@ namespace InvoiceImport
 
                         xlCell = (Excel.Range)xlRow.Cells[cols.invNum];
                         string invNo = (xlCell.Value2 ?? "").ToString();
+
                         xlCell = (Excel.Range)xlRow.Cells[cols.invDesc];
                         string invDesc = (xlCell.Value2 ?? "").ToString();
                         if(invDesc == "0")
@@ -276,6 +277,7 @@ namespace InvoiceImport
                                                 else
                                                     jobWO = add_invoice_to_job(jobID, woNo, vendorID, invNo, invAmt, invDesc, connString);
 
+                                                // if jobWO returned (ex: 12345-W01), invoice was succcessfully added to AIMM
                                                 if(jobWO.Length != 0)
                                                 {
                                                     LogIt.LogInfo($"Added invoice {invNo} for vendor {vendor} to job {jobWO}");
@@ -388,27 +390,24 @@ namespace InvoiceImport
 
                 // make a sub-folder for today's date, use that for PDFs
                 var subFolder = DateTime.Today.ToString("yyyy-MM-dd");
-                pdfPath = Path.Combine(pdfPath, subFolder);
+                pdfDestPath = Path.Combine(pdfDestPath, subFolder);
 
                 // if dest folder exists delete contents, otherwise create
-                if(Directory.Exists(pdfPath))
+                if(Directory.Exists(pdfDestPath))
                 {
-                    var msg = $"Directory {pdfPath} already exists.\nOK to delete PDF files?";
+                    var msg = $"Directory {pdfDestPath} already exists.\nOK to delete any PDF files?";
                     if(MessageBox.Show(msg,"Delete Files?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
-                    {
                         return;
-                    }
 
-                    foreach(var file in Directory.GetFiles(pdfPath,"*.pdf",SearchOption.TopDirectoryOnly))
+                    foreach(var file in Directory.GetFiles(pdfDestPath,"*.pdf",SearchOption.TopDirectoryOnly))
                     {
                         File.Delete(file);
                     }
                 }
                 else
                 {
-                    Directory.CreateDirectory(pdfPath);
+                    Directory.CreateDirectory(pdfDestPath);
                 }
-
 
                 // get list of invoice numbers from xl document.
                 xlPathName = txtExcelFile.Text;
@@ -427,8 +426,6 @@ namespace InvoiceImport
                             string invNo = (xlCell.Value2 ?? "").ToString();
                             if(vendor == "" || invNo == "")
                                 break;
-                            //xlCell = (Excel.Range)xlRow.Cells[cols.vendorID];
-                            //string vendorId = (xlCell.Value2 ?? "").ToString();
                             invoiceList.Add($"{vendor}_Invoice_{invNo}");
                         }
                         var isOk = close_excel();
@@ -440,33 +437,7 @@ namespace InvoiceImport
                         return;
                     }
 
-                    try
-                    {
-                        // split the supplied PDF into separate page documents
-                        using(PdfDocument combinedPdf = PdfReader.Open(pdfPathName, PdfDocumentOpenMode.Import))
-                        {
-                            for(int pg = 0; pg < combinedPdf.PageCount; pg++)
-                            {
-                                using(PdfDocument pageDoc = new PdfDocument())
-                                {
-                                    pageDoc.Version = combinedPdf.Version;
-                                    pageDoc.Info.Title = invoiceList[pg];
-                                    pageDoc.Info.Creator = combinedPdf.Info.Creator;
-                                    pageDoc.AddPage(combinedPdf.Pages[pg]);
-                                    destFile = $"{invoiceList[pg]}.pdf";
-                                    destPathName = Path.Combine(pdfPath, destFile);
-                                    pageDoc.Save(destPathName);
-                                }
-                            }
-                            LogIt.LogInfo($"Split PDF document \"{pdfFile}\" into multiple documents");
-                        }
-                    }
-                    catch(Exception ex)
-                    {
-                        var msg = $"Error processing PDF file \"{pdfFile}\": {ex.Message}";
-                        MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                        LogIt.LogError($"Error processing PDF file \"{pdfFile}\": {ex.Message}");
-                    }
+                    split_pdfs(pdfPathName, pdfDestPath, invoiceList);
 
                     // move original PDF to archive folder
                     destPath = archivePath;
@@ -714,6 +685,45 @@ namespace InvoiceImport
         #endregion
 
         #region methods
+
+        /// <summary>
+        /// split large PDF file into individual page files
+        /// </summary>
+        /// <param name="bigPdfFile">full path-name of PDF file to split</param>
+        /// <param name="destFolder">path to destination folder for split PDFs</param>
+        /// <param name="invoiceList">list of file names to apply to split files</param>
+        private void split_pdfs(string bigPdfFile, string destFolder, List<string> invoiceList)
+        {
+            var pdf = Path.GetFileName(bigPdfFile);
+            try
+            {
+                // split the supplied PDF into separate page documents
+                using(PdfDocument combinedPdf = PdfReader.Open(bigPdfFile, PdfDocumentOpenMode.Import))
+                {
+                    for(int pg = 0; pg < combinedPdf.PageCount; pg++)
+                    {
+                        using(PdfDocument pageDoc = new PdfDocument())
+                        {
+                            pageDoc.Version = combinedPdf.Version;
+                            pageDoc.Info.Title = invoiceList[pg];
+                            pageDoc.Info.Creator = combinedPdf.Info.Creator;
+                            pageDoc.AddPage(combinedPdf.Pages[pg]);
+                            destFile = $"{invoiceList[pg]}.pdf";
+                            destPathName = Path.Combine(destFolder, destFile);
+                            pageDoc.Save(destPathName);
+                        }
+                    }
+                    LogIt.LogInfo($"Split PDF document \"{pdf}\" into multiple documents");
+                }
+            }
+            catch(Exception ex)
+            {
+                var msg = $"Error processing PDF file \"{pdf}\": {ex.Message}";
+                Status = msg;
+                LogIt.LogError(msg);
+            }
+
+        }
 
         private bool move_file(string sourcePath, string destPath)
         {

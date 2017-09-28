@@ -147,6 +147,13 @@ namespace QuickBooks
             return result;
         }
 
+        /// <summary>
+        /// creates an XmlElement to add to document
+        /// </summary>
+        /// <param name="doc"></param>
+        /// <param name="tagName"></param>
+        /// <param name="tagVal"></param>
+        /// <returns></returns>
         private XmlElement MakeSimpleElem(XmlDocument doc, string tagName, string tagVal)
         {
             XmlElement elem = doc.CreateElement(tagName);
@@ -154,6 +161,12 @@ namespace QuickBooks
             return elem;
         }
 
+        /// <summary>
+        /// creates a quickbooks bill add request for a single vendor invoice
+        /// </summary>
+        /// <param name="doc"></param>
+        /// <param name="parent"></param>
+        /// <param name="billData"></param>
         void BuildBillAddRq(XmlDocument doc, XmlElement parent, BillData billData)
         {
             // create BillAddRq aggregate
@@ -225,6 +238,11 @@ namespace QuickBooks
             }
         }
 
+        /// <summary>
+        /// evaluates response from quickbooks and returns status and error message
+        /// </summary>
+        /// <param name="response"></param>
+        /// <param name="billData"></param>
         void WalkBillAddRs(string response, BillData billData)
         {
             //Parse the response XML string into an XmlDocument
@@ -246,7 +264,7 @@ namespace QuickBooks
                 billData.QBStatus = statusSeverity;
                 billData.QBMessage = statusMessage;
 
-                // this block is used if we need to iterate results and get data
+                // this code block would be used if we needed to iterate results and get field data
                 ////status code = 0 all OK, > 0 is error
                 //if(Convert.ToInt32(statusCode) >= 0)
                 //{
