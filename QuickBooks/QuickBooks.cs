@@ -3,973 +3,30 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Interop.QBFC13;
+using System.Windows.Forms;
+using System.Xml;
+using System.Xml.Linq;
+using Interop.QBXMLRP2;
+using Aimm.Logging;
 
 namespace QuickBooks
 {
-    public class QuickBooks
+    /// <summary>
+    /// for reporting status back to caller
+    /// </summary>
+    public class StatusChangedEventArgs : EventArgs
     {
-
-
-        void BuildBillAddRq(IMsgSetRequest requestMsgSet)
+        private string v;
+        public StatusChangedEventArgs(string v)
         {
-            
-            /*
-             * select vendor
-             * enter date
-             * due date should be pre-populated from vendor
-             * enter ref # (invoice #)
-             * enter amount (in sdk, enter this in details)
-             * enter class (use PPI)
-             * account should be pre-populated from vendor
-             * choose customer job from drop-down
-             * attach file
-             * save
-             */
-
-            
-            
-            // following are all from sample code.
-            // need to remove unnecessary ones.
-
-            IBillAdd BillAddRq = requestMsgSet.AppendBillAddRq();
-            
-            //Set attributes
-            
-            //todo: get vendor list id, see if that will enter all fields?
-
-            //Set field value for ListID
-            BillAddRq.VendorRef.ListID.SetValue("200000-1011023419");
-            
-            //Set field value for FullName
-            BillAddRq.VendorRef.FullName.SetValue("ab");
-            //Set field value for Addr1
-            BillAddRq.VendorAddress.Addr1.SetValue("ab");
-            //Set field value for Addr2
-            BillAddRq.VendorAddress.Addr2.SetValue("ab");
-            //Set field value for Addr3
-            BillAddRq.VendorAddress.Addr3.SetValue("ab");
-            //Set field value for Addr4
-            BillAddRq.VendorAddress.Addr4.SetValue("ab");
-            //Set field value for Addr5
-            BillAddRq.VendorAddress.Addr5.SetValue("ab");
-            //Set field value for City
-            BillAddRq.VendorAddress.City.SetValue("ab");
-            //Set field value for State
-            BillAddRq.VendorAddress.State.SetValue("ab");
-            //Set field value for PostalCode
-            BillAddRq.VendorAddress.PostalCode.SetValue("ab");
-            //Set field value for Country
-            BillAddRq.VendorAddress.Country.SetValue("ab");
-            //Set field value for Note
-            BillAddRq.VendorAddress.Note.SetValue("ab");
-            
-            
-            //Set field value for ListID
-            BillAddRq.APAccountRef.ListID.SetValue("200000-1011023419");
-            //Set field value for FullName
-            BillAddRq.APAccountRef.FullName.SetValue("ab");
-            
-            //Set field value for TxnDate
-            BillAddRq.TxnDate.SetValue(DateTime.Parse("12/15/2007"));
-            //Set field value for DueDate
-            BillAddRq.DueDate.SetValue(DateTime.Parse("12/15/2007"));
-            //Set field value for RefNumber
-            BillAddRq.RefNumber.SetValue("ab");
-            //Set field value for ListID
-            BillAddRq.TermsRef.ListID.SetValue("200000-1011023419");
-            //Set field value for FullName
-            BillAddRq.TermsRef.FullName.SetValue("ab");
-            //Set field value for Memo
-            BillAddRq.Memo.SetValue("ab");
-            //todo: fix or remove this item
-            ////Set field value for ExchangeRate
-            //BillAddRq.ExchangeRate.SetValue("IQBFloatType");
-            //Set field value for ExternalGUID
-            BillAddRq.ExternalGUID.SetValue(Guid.NewGuid().ToString());
-            
-
-
-            //Set field value for LinkToTxnIDList
-            //May create more than one of these if needed
-            BillAddRq.LinkToTxnIDList.Add("200000-1011023419");
-            IExpenseLineAdd ExpenseLineAdd1 = BillAddRq.ExpenseLineAddList.Append();
-            //Set attributes
-            //Set field value for defMacro
-            ExpenseLineAdd1.defMacro.SetValue("IQBStringType");
-            //Set field value for ListID
-            ExpenseLineAdd1.AccountRef.ListID.SetValue("200000-1011023419");
-            //Set field value for FullName
-            ExpenseLineAdd1.AccountRef.FullName.SetValue("ab");
-            
-            //Set field value for Amount
-            ExpenseLineAdd1.Amount.SetValue(10.01);
-            //Set field value for Memo
-            ExpenseLineAdd1.Memo.SetValue("ab");
-            
-            //Set field value for ListID
-            ExpenseLineAdd1.CustomerRef.ListID.SetValue("200000-1011023419");
-            //Set field value for FullName
-            ExpenseLineAdd1.CustomerRef.FullName.SetValue("ab");
-            //Set field value for ListID
-            ExpenseLineAdd1.ClassRef.ListID.SetValue("200000-1011023419");
-            //Set field value for FullName
-            ExpenseLineAdd1.ClassRef.FullName.SetValue("ab");
-            //Set field value for BillableStatus
-            ExpenseLineAdd1.BillableStatus.SetValue(ENBillableStatus.bsBillable);
-            //Set field value for ListID
-            ExpenseLineAdd1.SalesRepRef.ListID.SetValue("200000-1011023419");
-            //Set field value for FullName
-            ExpenseLineAdd1.SalesRepRef.FullName.SetValue("ab");
-            IDataExt DataExt2 = ExpenseLineAdd1.DataExtList.Append();
-            //Set field value for OwnerID
-            DataExt2.OwnerID.SetValue(Guid.NewGuid().ToString());
-            //Set field value for DataExtName
-            DataExt2.DataExtName.SetValue("ab");
-            //Set field value for DataExtValue
-            DataExt2.DataExtValue.SetValue("ab");
-            IORItemLineAdd ORItemLineAddListElement3 = BillAddRq.ORItemLineAddList.Append();
-            string ORItemLineAddListElementType4 = "ItemLineAdd";
-            if(ORItemLineAddListElementType4 == "ItemLineAdd")
-            {
-                //Set field value for ListID
-                ORItemLineAddListElement3.ItemLineAdd.ItemRef.ListID.SetValue("200000-1011023419");
-                //Set field value for FullName
-                ORItemLineAddListElement3.ItemLineAdd.ItemRef.FullName.SetValue("ab");
-                //Set field value for ListID
-                ORItemLineAddListElement3.ItemLineAdd.InventorySiteRef.ListID.SetValue("200000-1011023419");
-                //Set field value for FullName
-                ORItemLineAddListElement3.ItemLineAdd.InventorySiteRef.FullName.SetValue("ab");
-                //Set field value for ListID
-                ORItemLineAddListElement3.ItemLineAdd.InventorySiteLocationRef.ListID.SetValue("200000-1011023419");
-                //Set field value for FullName
-                ORItemLineAddListElement3.ItemLineAdd.InventorySiteLocationRef.FullName.SetValue("ab");
-                string ORSerialLotNumberElementType5 = "SerialNumber";
-                if(ORSerialLotNumberElementType5 == "SerialNumber")
-                {
-                    //Set field value for SerialNumber
-                    ORItemLineAddListElement3.ItemLineAdd.ORSerialLotNumber.SerialNumber.SetValue("ab");
-                }
-                if(ORSerialLotNumberElementType5 == "LotNumber")
-                {
-                    //Set field value for LotNumber
-                    ORItemLineAddListElement3.ItemLineAdd.ORSerialLotNumber.LotNumber.SetValue("ab");
-                }
-                //Set field value for Desc
-                ORItemLineAddListElement3.ItemLineAdd.Desc.SetValue("ab");
-                //Set field value for Quantity
-                ORItemLineAddListElement3.ItemLineAdd.Quantity.SetValue(2);
-                //Set field value for UnitOfMeasure
-                ORItemLineAddListElement3.ItemLineAdd.UnitOfMeasure.SetValue("ab");
-                //Set field value for Cost
-                ORItemLineAddListElement3.ItemLineAdd.Cost.SetValue(15.65);
-                //Set field value for Amount
-                ORItemLineAddListElement3.ItemLineAdd.Amount.SetValue(10.01);
-                //Set field value for ListID
-                ORItemLineAddListElement3.ItemLineAdd.CustomerRef.ListID.SetValue("200000-1011023419");
-                //Set field value for FullName
-                ORItemLineAddListElement3.ItemLineAdd.CustomerRef.FullName.SetValue("ab");
-                //Set field value for ListID
-                ORItemLineAddListElement3.ItemLineAdd.ClassRef.ListID.SetValue("200000-1011023419");
-                //Set field value for FullName
-                ORItemLineAddListElement3.ItemLineAdd.ClassRef.FullName.SetValue("ab");
-                //Set field value for BillableStatus
-                ORItemLineAddListElement3.ItemLineAdd.BillableStatus.SetValue(ENBillableStatus.bsBillable);
-                //Set field value for ListID
-                ORItemLineAddListElement3.ItemLineAdd.OverrideItemAccountRef.ListID.SetValue("200000-1011023419");
-                //Set field value for FullName
-                ORItemLineAddListElement3.ItemLineAdd.OverrideItemAccountRef.FullName.SetValue("ab");
-                //Set field value for TxnID
-                ORItemLineAddListElement3.ItemLineAdd.LinkToTxn.TxnID.SetValue("200000-1011023419");
-                //Set field value for TxnLineID
-                ORItemLineAddListElement3.ItemLineAdd.LinkToTxn.TxnLineID.SetValue("200000-1011023419");
-                //Set field value for ListID
-                ORItemLineAddListElement3.ItemLineAdd.SalesRepRef.ListID.SetValue("200000-1011023419");
-                //Set field value for FullName
-                ORItemLineAddListElement3.ItemLineAdd.SalesRepRef.FullName.SetValue("ab");
-                IDataExt DataExt6 = ORItemLineAddListElement3.ItemLineAdd.DataExtList.Append();
-                //Set field value for OwnerID
-                DataExt6.OwnerID.SetValue(Guid.NewGuid().ToString());
-                //Set field value for DataExtName
-                DataExt6.DataExtName.SetValue("ab");
-                //Set field value for DataExtValue
-                DataExt6.DataExtValue.SetValue("ab");
-            }
-            if(ORItemLineAddListElementType4 == "ItemGroupLineAdd")
-            {
-                //Set field value for ListID
-                ORItemLineAddListElement3.ItemGroupLineAdd.ItemGroupRef.ListID.SetValue("200000-1011023419");
-                //Set field value for FullName
-                ORItemLineAddListElement3.ItemGroupLineAdd.ItemGroupRef.FullName.SetValue("ab");
-                //Set field value for Quantity
-                ORItemLineAddListElement3.ItemGroupLineAdd.Quantity.SetValue(2);
-                //Set field value for UnitOfMeasure
-                ORItemLineAddListElement3.ItemGroupLineAdd.UnitOfMeasure.SetValue("ab");
-                //Set field value for ListID
-                ORItemLineAddListElement3.ItemGroupLineAdd.InventorySiteRef.ListID.SetValue("200000-1011023419");
-                //Set field value for FullName
-                ORItemLineAddListElement3.ItemGroupLineAdd.InventorySiteRef.FullName.SetValue("ab");
-                //Set field value for ListID
-                ORItemLineAddListElement3.ItemGroupLineAdd.InventorySiteLocationRef.ListID.SetValue("200000-1011023419");
-                //Set field value for FullName
-                ORItemLineAddListElement3.ItemGroupLineAdd.InventorySiteLocationRef.FullName.SetValue("ab");
-                IDataExt DataExt7 = ORItemLineAddListElement3.ItemGroupLineAdd.DataExtList.Append();
-                //Set field value for OwnerID
-                DataExt7.OwnerID.SetValue(Guid.NewGuid().ToString());
-                //Set field value for DataExtName
-                DataExt7.DataExtName.SetValue("ab");
-                //Set field value for DataExtValue
-                DataExt7.DataExtValue.SetValue("ab");
-            }
-            
-            //Set field value for IncludeRetElementList
-            //May create more than one of these if needed
-            BillAddRq.IncludeRetElementList.Add("ab");
-
+            this.v = v;
         }
-
-        void WalkBillAddRs(IMsgSetResponse responseMsgSet)
-        {
-            if(responseMsgSet == null)
-                return;
-
-            IResponseList responseList = responseMsgSet.ResponseList;
-            if(responseList == null)
-                return;
-
-            //if we sent only one request, there is only one response, we'll walk the list for this sample
-            for(int i = 0; i < responseList.Count; i++)
-            {
-                IResponse response = responseList.GetAt(i);
-                //check the status code of the response, 0=ok, >0 is warning
-                if(response.StatusCode >= 0)
-                {
-                    //the request-specific response is in the details, make sure we have some
-                    if(response.Detail != null)
-                    {
-                        //make sure the response is the type we're expecting
-                        ENResponseType responseType = (ENResponseType)response.Type.GetValue();
-                        if(responseType == ENResponseType.rtBillAddRs)
-                        {
-                            //upcast to more specific type here, this is safe because we checked with response.Type check above
-                            IBillRet BillRet = (IBillRet)response.Detail;
-                            WalkBillRet(BillRet);
-                        }
-                    }
-                }
-            }
-        }
-
-
-        void WalkBillRet(IBillRet BillRet)
-        {
-            if(BillRet == null)
-                return;
-
-            //Go through all the elements of IBillRet
-            //Get value of TxnID
-            string TxnID8 = (string)BillRet.TxnID.GetValue();
-            //Get value of TimeCreated
-            DateTime TimeCreated9 = (DateTime)BillRet.TimeCreated.GetValue();
-            //Get value of TimeModified
-            DateTime TimeModified10 = (DateTime)BillRet.TimeModified.GetValue();
-            //Get value of EditSequence
-            string EditSequence11 = (string)BillRet.EditSequence.GetValue();
-            //Get value of TxnNumber
-            if(BillRet.TxnNumber != null)
-            {
-                int TxnNumber12 = (int)BillRet.TxnNumber.GetValue();
-            }
-            //Get value of ListID
-            if(BillRet.VendorRef.ListID != null)
-            {
-                string ListID13 = (string)BillRet.VendorRef.ListID.GetValue();
-            }
-            //Get value of FullName
-            if(BillRet.VendorRef.FullName != null)
-            {
-                string FullName14 = (string)BillRet.VendorRef.FullName.GetValue();
-            }
-            if(BillRet.VendorAddress != null)
-            {
-                //Get value of Addr1
-                if(BillRet.VendorAddress.Addr1 != null)
-                {
-                    string Addr115 = (string)BillRet.VendorAddress.Addr1.GetValue();
-                }
-                //Get value of Addr2
-                if(BillRet.VendorAddress.Addr2 != null)
-                {
-                    string Addr216 = (string)BillRet.VendorAddress.Addr2.GetValue();
-                }
-                //Get value of Addr3
-                if(BillRet.VendorAddress.Addr3 != null)
-                {
-                    string Addr317 = (string)BillRet.VendorAddress.Addr3.GetValue();
-                }
-                //Get value of Addr4
-                if(BillRet.VendorAddress.Addr4 != null)
-                {
-                    string Addr418 = (string)BillRet.VendorAddress.Addr4.GetValue();
-                }
-                //Get value of Addr5
-                if(BillRet.VendorAddress.Addr5 != null)
-                {
-                    string Addr519 = (string)BillRet.VendorAddress.Addr5.GetValue();
-                }
-                //Get value of City
-                if(BillRet.VendorAddress.City != null)
-                {
-                    string City20 = (string)BillRet.VendorAddress.City.GetValue();
-                }
-                //Get value of State
-                if(BillRet.VendorAddress.State != null)
-                {
-                    string State21 = (string)BillRet.VendorAddress.State.GetValue();
-                }
-                //Get value of PostalCode
-                if(BillRet.VendorAddress.PostalCode != null)
-                {
-                    string PostalCode22 = (string)BillRet.VendorAddress.PostalCode.GetValue();
-                }
-                //Get value of Country
-                if(BillRet.VendorAddress.Country != null)
-                {
-                    string Country23 = (string)BillRet.VendorAddress.Country.GetValue();
-                }
-                //Get value of Note
-                if(BillRet.VendorAddress.Note != null)
-                {
-                    string Note24 = (string)BillRet.VendorAddress.Note.GetValue();
-                }
-            }
-            if(BillRet.APAccountRef != null)
-            {
-                //Get value of ListID
-                if(BillRet.APAccountRef.ListID != null)
-                {
-                    string ListID25 = (string)BillRet.APAccountRef.ListID.GetValue();
-                }
-                //Get value of FullName
-                if(BillRet.APAccountRef.FullName != null)
-                {
-                    string FullName26 = (string)BillRet.APAccountRef.FullName.GetValue();
-                }
-            }
-            //Get value of TxnDate
-            DateTime TxnDate27 = (DateTime)BillRet.TxnDate.GetValue();
-            //Get value of DueDate
-            if(BillRet.DueDate != null)
-            {
-                DateTime DueDate28 = (DateTime)BillRet.DueDate.GetValue();
-            }
-            //Get value of AmountDue
-            double AmountDue29 = (double)BillRet.AmountDue.GetValue();
-            if(BillRet.CurrencyRef != null)
-            {
-                //Get value of ListID
-                if(BillRet.CurrencyRef.ListID != null)
-                {
-                    string ListID30 = (string)BillRet.CurrencyRef.ListID.GetValue();
-                }
-                //Get value of FullName
-                if(BillRet.CurrencyRef.FullName != null)
-                {
-                    string FullName31 = (string)BillRet.CurrencyRef.FullName.GetValue();
-                }
-            }
-            
-            //todo: fix or remove this item
-            ////Get value of ExchangeRate
-            //if(BillRet.ExchangeRate != null)
-            //{
-            //    IQBFloatType ExchangeRate32 = (IQBFloatType)BillRet.ExchangeRate.GetValue();
-            //}
-            //Get value of AmountDueInHomeCurrency
-            if(BillRet.AmountDueInHomeCurrency != null)
-            {
-                double AmountDueInHomeCurrency33 = (double)BillRet.AmountDueInHomeCurrency.GetValue();
-            }
-            //Get value of RefNumber
-            if(BillRet.RefNumber != null)
-            {
-                string RefNumber34 = (string)BillRet.RefNumber.GetValue();
-            }
-            if(BillRet.TermsRef != null)
-            {
-                //Get value of ListID
-                if(BillRet.TermsRef.ListID != null)
-                {
-                    string ListID35 = (string)BillRet.TermsRef.ListID.GetValue();
-                }
-                //Get value of FullName
-                if(BillRet.TermsRef.FullName != null)
-                {
-                    string FullName36 = (string)BillRet.TermsRef.FullName.GetValue();
-                }
-            }
-            //Get value of Memo
-            if(BillRet.Memo != null)
-            {
-                string Memo37 = (string)BillRet.Memo.GetValue();
-            }
-            //Get value of IsPaid
-            if(BillRet.IsPaid != null)
-            {
-                bool IsPaid38 = (bool)BillRet.IsPaid.GetValue();
-            }
-            //Get value of ExternalGUID
-            if(BillRet.ExternalGUID != null)
-            {
-                string ExternalGUID39 = (string)BillRet.ExternalGUID.GetValue();
-            }
-            if(BillRet.LinkedTxnList != null)
-            {
-                for(int i40 = 0; i40 < BillRet.LinkedTxnList.Count; i40++)
-                {
-                    ILinkedTxn LinkedTxn = BillRet.LinkedTxnList.GetAt(i40);
-                    //Get value of TxnID
-                    string TxnID41 = (string)LinkedTxn.TxnID.GetValue();
-                    //Get value of TxnType
-                    ENTxnType TxnType42 = (ENTxnType)LinkedTxn.TxnType.GetValue();
-                    //Get value of TxnDate
-                    DateTime TxnDate43 = (DateTime)LinkedTxn.TxnDate.GetValue();
-                    //Get value of RefNumber
-                    if(LinkedTxn.RefNumber != null)
-                    {
-                        string RefNumber44 = (string)LinkedTxn.RefNumber.GetValue();
-                    }
-                    //Get value of LinkType
-                    if(LinkedTxn.LinkType != null)
-                    {
-                        ENLinkType LinkType45 = (ENLinkType)LinkedTxn.LinkType.GetValue();
-                    }
-                    //Get value of Amount
-                    double Amount46 = (double)LinkedTxn.Amount.GetValue();
-                }
-            }
-            if(BillRet.ExpenseLineRetList != null)
-            {
-                for(int i47 = 0; i47 < BillRet.ExpenseLineRetList.Count; i47++)
-                {
-                    IExpenseLineRet ExpenseLineRet = BillRet.ExpenseLineRetList.GetAt(i47);
-                    //Get value of TxnLineID
-                    string TxnLineID48 = (string)ExpenseLineRet.TxnLineID.GetValue();
-                    if(ExpenseLineRet.AccountRef != null)
-                    {
-                        //Get value of ListID
-                        if(ExpenseLineRet.AccountRef.ListID != null)
-                        {
-                            string ListID49 = (string)ExpenseLineRet.AccountRef.ListID.GetValue();
-                        }
-                        //Get value of FullName
-                        if(ExpenseLineRet.AccountRef.FullName != null)
-                        {
-                            string FullName50 = (string)ExpenseLineRet.AccountRef.FullName.GetValue();
-                        }
-                    }
-                    //Get value of Amount
-                    if(ExpenseLineRet.Amount != null)
-                    {
-                        double Amount51 = (double)ExpenseLineRet.Amount.GetValue();
-                    }
-                    //Get value of Memo
-                    if(ExpenseLineRet.Memo != null)
-                    {
-                        string Memo52 = (string)ExpenseLineRet.Memo.GetValue();
-                    }
-                    if(ExpenseLineRet.CustomerRef != null)
-                    {
-                        //Get value of ListID
-                        if(ExpenseLineRet.CustomerRef.ListID != null)
-                        {
-                            string ListID53 = (string)ExpenseLineRet.CustomerRef.ListID.GetValue();
-                        }
-                        //Get value of FullName
-                        if(ExpenseLineRet.CustomerRef.FullName != null)
-                        {
-                            string FullName54 = (string)ExpenseLineRet.CustomerRef.FullName.GetValue();
-                        }
-                    }
-                    if(ExpenseLineRet.ClassRef != null)
-                    {
-                        //Get value of ListID
-                        if(ExpenseLineRet.ClassRef.ListID != null)
-                        {
-                            string ListID55 = (string)ExpenseLineRet.ClassRef.ListID.GetValue();
-                        }
-                        //Get value of FullName
-                        if(ExpenseLineRet.ClassRef.FullName != null)
-                        {
-                            string FullName56 = (string)ExpenseLineRet.ClassRef.FullName.GetValue();
-                        }
-                    }
-                    //Get value of BillableStatus
-                    if(ExpenseLineRet.BillableStatus != null)
-                    {
-                        ENBillableStatus BillableStatus57 = (ENBillableStatus)ExpenseLineRet.BillableStatus.GetValue();
-                    }
-                    if(ExpenseLineRet.SalesRepRef != null)
-                    {
-                        //Get value of ListID
-                        if(ExpenseLineRet.SalesRepRef.ListID != null)
-                        {
-                            string ListID58 = (string)ExpenseLineRet.SalesRepRef.ListID.GetValue();
-                        }
-                        //Get value of FullName
-                        if(ExpenseLineRet.SalesRepRef.FullName != null)
-                        {
-                            string FullName59 = (string)ExpenseLineRet.SalesRepRef.FullName.GetValue();
-                        }
-                    }
-                    if(ExpenseLineRet.DataExtRetList != null)
-                    {
-                        for(int i60 = 0; i60 < ExpenseLineRet.DataExtRetList.Count; i60++)
-                        {
-                            IDataExtRet DataExtRet = ExpenseLineRet.DataExtRetList.GetAt(i60);
-                            //Get value of OwnerID
-                            if(DataExtRet.OwnerID != null)
-                            {
-                                string OwnerID61 = (string)DataExtRet.OwnerID.GetValue();
-                            }
-                            //Get value of DataExtName
-                            string DataExtName62 = (string)DataExtRet.DataExtName.GetValue();
-                            //Get value of DataExtType
-                            ENDataExtType DataExtType63 = (ENDataExtType)DataExtRet.DataExtType.GetValue();
-                            //Get value of DataExtValue
-                            string DataExtValue64 = (string)DataExtRet.DataExtValue.GetValue();
-                        }
-                    }
-                }
-            }
-            if(BillRet.ORItemLineRetList != null)
-            {
-                for(int i65 = 0; i65 < BillRet.ORItemLineRetList.Count; i65++)
-                {
-                    IORItemLineRet ORItemLineRet = BillRet.ORItemLineRetList.GetAt(i65);
-                    if(ORItemLineRet.ItemLineRet != null)
-                    {
-                        if(ORItemLineRet.ItemLineRet != null)
-                        {
-                            //Get value of TxnLineID
-                            string TxnLineID66 = (string)ORItemLineRet.ItemLineRet.TxnLineID.GetValue();
-                            if(ORItemLineRet.ItemLineRet.ItemRef != null)
-                            {
-                                //Get value of ListID
-                                if(ORItemLineRet.ItemLineRet.ItemRef.ListID != null)
-                                {
-                                    string ListID67 = (string)ORItemLineRet.ItemLineRet.ItemRef.ListID.GetValue();
-                                }
-                                //Get value of FullName
-                                if(ORItemLineRet.ItemLineRet.ItemRef.FullName != null)
-                                {
-                                    string FullName68 = (string)ORItemLineRet.ItemLineRet.ItemRef.FullName.GetValue();
-                                }
-                            }
-                            if(ORItemLineRet.ItemLineRet.InventorySiteRef != null)
-                            {
-                                //Get value of ListID
-                                if(ORItemLineRet.ItemLineRet.InventorySiteRef.ListID != null)
-                                {
-                                    string ListID69 = (string)ORItemLineRet.ItemLineRet.InventorySiteRef.ListID.GetValue();
-                                }
-                                //Get value of FullName
-                                if(ORItemLineRet.ItemLineRet.InventorySiteRef.FullName != null)
-                                {
-                                    string FullName70 = (string)ORItemLineRet.ItemLineRet.InventorySiteRef.FullName.GetValue();
-                                }
-                            }
-                            if(ORItemLineRet.ItemLineRet.InventorySiteLocationRef != null)
-                            {
-                                //Get value of ListID
-                                if(ORItemLineRet.ItemLineRet.InventorySiteLocationRef.ListID != null)
-                                {
-                                    string ListID71 = (string)ORItemLineRet.ItemLineRet.InventorySiteLocationRef.ListID.GetValue();
-                                }
-                                //Get value of FullName
-                                if(ORItemLineRet.ItemLineRet.InventorySiteLocationRef.FullName != null)
-                                {
-                                    string FullName72 = (string)ORItemLineRet.ItemLineRet.InventorySiteLocationRef.FullName.GetValue();
-                                }
-                            }
-                            if(ORItemLineRet.ItemLineRet.ORSerialLotNumber != null)
-                            {
-                                if(ORItemLineRet.ItemLineRet.ORSerialLotNumber.SerialNumber != null)
-                                {
-                                    //Get value of SerialNumber
-                                    if(ORItemLineRet.ItemLineRet.ORSerialLotNumber.SerialNumber != null)
-                                    {
-                                        string SerialNumber73 = (string)ORItemLineRet.ItemLineRet.ORSerialLotNumber.SerialNumber.GetValue();
-                                    }
-                                }
-                                if(ORItemLineRet.ItemLineRet.ORSerialLotNumber.LotNumber != null)
-                                {
-                                    //Get value of LotNumber
-                                    if(ORItemLineRet.ItemLineRet.ORSerialLotNumber.LotNumber != null)
-                                    {
-                                        string LotNumber74 = (string)ORItemLineRet.ItemLineRet.ORSerialLotNumber.LotNumber.GetValue();
-                                    }
-                                }
-                            }
-                            //Get value of Desc
-                            if(ORItemLineRet.ItemLineRet.Desc != null)
-                            {
-                                string Desc75 = (string)ORItemLineRet.ItemLineRet.Desc.GetValue();
-                            }
-                            //Get value of Quantity
-                            if(ORItemLineRet.ItemLineRet.Quantity != null)
-                            {
-                                int Quantity76 = (int)ORItemLineRet.ItemLineRet.Quantity.GetValue();
-                            }
-                            //Get value of UnitOfMeasure
-                            if(ORItemLineRet.ItemLineRet.UnitOfMeasure != null)
-                            {
-                                string UnitOfMeasure77 = (string)ORItemLineRet.ItemLineRet.UnitOfMeasure.GetValue();
-                            }
-                            if(ORItemLineRet.ItemLineRet.OverrideUOMSetRef != null)
-                            {
-                                //Get value of ListID
-                                if(ORItemLineRet.ItemLineRet.OverrideUOMSetRef.ListID != null)
-                                {
-                                    string ListID78 = (string)ORItemLineRet.ItemLineRet.OverrideUOMSetRef.ListID.GetValue();
-                                }
-                                //Get value of FullName
-                                if(ORItemLineRet.ItemLineRet.OverrideUOMSetRef.FullName != null)
-                                {
-                                    string FullName79 = (string)ORItemLineRet.ItemLineRet.OverrideUOMSetRef.FullName.GetValue();
-                                }
-                            }
-                            //Get value of Cost
-                            if(ORItemLineRet.ItemLineRet.Cost != null)
-                            {
-                                double Cost80 = (double)ORItemLineRet.ItemLineRet.Cost.GetValue();
-                            }
-                            //Get value of Amount
-                            if(ORItemLineRet.ItemLineRet.Amount != null)
-                            {
-                                double Amount81 = (double)ORItemLineRet.ItemLineRet.Amount.GetValue();
-                            }
-                            if(ORItemLineRet.ItemLineRet.CustomerRef != null)
-                            {
-                                //Get value of ListID
-                                if(ORItemLineRet.ItemLineRet.CustomerRef.ListID != null)
-                                {
-                                    string ListID82 = (string)ORItemLineRet.ItemLineRet.CustomerRef.ListID.GetValue();
-                                }
-                                //Get value of FullName
-                                if(ORItemLineRet.ItemLineRet.CustomerRef.FullName != null)
-                                {
-                                    string FullName83 = (string)ORItemLineRet.ItemLineRet.CustomerRef.FullName.GetValue();
-                                }
-                            }
-                            if(ORItemLineRet.ItemLineRet.ClassRef != null)
-                            {
-                                //Get value of ListID
-                                if(ORItemLineRet.ItemLineRet.ClassRef.ListID != null)
-                                {
-                                    string ListID84 = (string)ORItemLineRet.ItemLineRet.ClassRef.ListID.GetValue();
-                                }
-                                //Get value of FullName
-                                if(ORItemLineRet.ItemLineRet.ClassRef.FullName != null)
-                                {
-                                    string FullName85 = (string)ORItemLineRet.ItemLineRet.ClassRef.FullName.GetValue();
-                                }
-                            }
-                            //Get value of BillableStatus
-                            if(ORItemLineRet.ItemLineRet.BillableStatus != null)
-                            {
-                                ENBillableStatus BillableStatus86 = (ENBillableStatus)ORItemLineRet.ItemLineRet.BillableStatus.GetValue();
-                            }
-                            if(ORItemLineRet.ItemLineRet.SalesRepRef != null)
-                            {
-                                //Get value of ListID
-                                if(ORItemLineRet.ItemLineRet.SalesRepRef.ListID != null)
-                                {
-                                    string ListID87 = (string)ORItemLineRet.ItemLineRet.SalesRepRef.ListID.GetValue();
-                                }
-                                //Get value of FullName
-                                if(ORItemLineRet.ItemLineRet.SalesRepRef.FullName != null)
-                                {
-                                    string FullName88 = (string)ORItemLineRet.ItemLineRet.SalesRepRef.FullName.GetValue();
-                                }
-                            }
-                            if(ORItemLineRet.ItemLineRet.DataExtRetList != null)
-                            {
-                                for(int i89 = 0; i89 < ORItemLineRet.ItemLineRet.DataExtRetList.Count; i89++)
-                                {
-                                    IDataExtRet DataExtRet = ORItemLineRet.ItemLineRet.DataExtRetList.GetAt(i89);
-                                    //Get value of OwnerID
-                                    if(DataExtRet.OwnerID != null)
-                                    {
-                                        string OwnerID90 = (string)DataExtRet.OwnerID.GetValue();
-                                    }
-                                    //Get value of DataExtName
-                                    string DataExtName91 = (string)DataExtRet.DataExtName.GetValue();
-                                    //Get value of DataExtType
-                                    ENDataExtType DataExtType92 = (ENDataExtType)DataExtRet.DataExtType.GetValue();
-                                    //Get value of DataExtValue
-                                    string DataExtValue93 = (string)DataExtRet.DataExtValue.GetValue();
-                                }
-                            }
-                        }
-                    }
-                    if(ORItemLineRet.ItemGroupLineRet != null)
-                    {
-                        if(ORItemLineRet.ItemGroupLineRet != null)
-                        {
-                            //Get value of TxnLineID
-                            string TxnLineID94 = (string)ORItemLineRet.ItemGroupLineRet.TxnLineID.GetValue();
-                            //Get value of ListID
-                            if(ORItemLineRet.ItemGroupLineRet.ItemGroupRef.ListID != null)
-                            {
-                                string ListID95 = (string)ORItemLineRet.ItemGroupLineRet.ItemGroupRef.ListID.GetValue();
-                            }
-                            //Get value of FullName
-                            if(ORItemLineRet.ItemGroupLineRet.ItemGroupRef.FullName != null)
-                            {
-                                string FullName96 = (string)ORItemLineRet.ItemGroupLineRet.ItemGroupRef.FullName.GetValue();
-                            }
-                            //Get value of Desc
-                            if(ORItemLineRet.ItemGroupLineRet.Desc != null)
-                            {
-                                string Desc97 = (string)ORItemLineRet.ItemGroupLineRet.Desc.GetValue();
-                            }
-                            //Get value of Quantity
-                            if(ORItemLineRet.ItemGroupLineRet.Quantity != null)
-                            {
-                                int Quantity98 = (int)ORItemLineRet.ItemGroupLineRet.Quantity.GetValue();
-                            }
-                            //Get value of UnitOfMeasure
-                            if(ORItemLineRet.ItemGroupLineRet.UnitOfMeasure != null)
-                            {
-                                string UnitOfMeasure99 = (string)ORItemLineRet.ItemGroupLineRet.UnitOfMeasure.GetValue();
-                            }
-                            if(ORItemLineRet.ItemGroupLineRet.OverrideUOMSetRef != null)
-                            {
-                                //Get value of ListID
-                                if(ORItemLineRet.ItemGroupLineRet.OverrideUOMSetRef.ListID != null)
-                                {
-                                    string ListID100 = (string)ORItemLineRet.ItemGroupLineRet.OverrideUOMSetRef.ListID.GetValue();
-                                }
-                                //Get value of FullName
-                                if(ORItemLineRet.ItemGroupLineRet.OverrideUOMSetRef.FullName != null)
-                                {
-                                    string FullName101 = (string)ORItemLineRet.ItemGroupLineRet.OverrideUOMSetRef.FullName.GetValue();
-                                }
-                            }
-                            //Get value of TotalAmount
-                            double TotalAmount102 = (double)ORItemLineRet.ItemGroupLineRet.TotalAmount.GetValue();
-                            if(ORItemLineRet.ItemGroupLineRet.ItemLineRetList != null)
-                            {
-                                for(int i103 = 0; i103 < ORItemLineRet.ItemGroupLineRet.ItemLineRetList.Count; i103++)
-                                {
-                                    IItemLineRet ItemLineRet = ORItemLineRet.ItemGroupLineRet.ItemLineRetList.GetAt(i103);
-                                    //Get value of TxnLineID
-                                    string TxnLineID104 = (string)ItemLineRet.TxnLineID.GetValue();
-                                    if(ItemLineRet.ItemRef != null)
-                                    {
-                                        //Get value of ListID
-                                        if(ItemLineRet.ItemRef.ListID != null)
-                                        {
-                                            string ListID105 = (string)ItemLineRet.ItemRef.ListID.GetValue();
-                                        }
-                                        //Get value of FullName
-                                        if(ItemLineRet.ItemRef.FullName != null)
-                                        {
-                                            string FullName106 = (string)ItemLineRet.ItemRef.FullName.GetValue();
-                                        }
-                                    }
-                                    if(ItemLineRet.InventorySiteRef != null)
-                                    {
-                                        //Get value of ListID
-                                        if(ItemLineRet.InventorySiteRef.ListID != null)
-                                        {
-                                            string ListID107 = (string)ItemLineRet.InventorySiteRef.ListID.GetValue();
-                                        }
-                                        //Get value of FullName
-                                        if(ItemLineRet.InventorySiteRef.FullName != null)
-                                        {
-                                            string FullName108 = (string)ItemLineRet.InventorySiteRef.FullName.GetValue();
-                                        }
-                                    }
-                                    if(ItemLineRet.InventorySiteLocationRef != null)
-                                    {
-                                        //Get value of ListID
-                                        if(ItemLineRet.InventorySiteLocationRef.ListID != null)
-                                        {
-                                            string ListID109 = (string)ItemLineRet.InventorySiteLocationRef.ListID.GetValue();
-                                        }
-                                        //Get value of FullName
-                                        if(ItemLineRet.InventorySiteLocationRef.FullName != null)
-                                        {
-                                            string FullName110 = (string)ItemLineRet.InventorySiteLocationRef.FullName.GetValue();
-                                        }
-                                    }
-                                    if(ItemLineRet.ORSerialLotNumber != null)
-                                    {
-                                        if(ItemLineRet.ORSerialLotNumber.SerialNumber != null)
-                                        {
-                                            //Get value of SerialNumber
-                                            if(ItemLineRet.ORSerialLotNumber.SerialNumber != null)
-                                            {
-                                                string SerialNumber111 = (string)ItemLineRet.ORSerialLotNumber.SerialNumber.GetValue();
-                                            }
-                                        }
-                                        if(ItemLineRet.ORSerialLotNumber.LotNumber != null)
-                                        {
-                                            //Get value of LotNumber
-                                            if(ItemLineRet.ORSerialLotNumber.LotNumber != null)
-                                            {
-                                                string LotNumber112 = (string)ItemLineRet.ORSerialLotNumber.LotNumber.GetValue();
-                                            }
-                                        }
-                                    }
-                                    //Get value of Desc
-                                    if(ItemLineRet.Desc != null)
-                                    {
-                                        string Desc113 = (string)ItemLineRet.Desc.GetValue();
-                                    }
-                                    //Get value of Quantity
-                                    if(ItemLineRet.Quantity != null)
-                                    {
-                                        int Quantity114 = (int)ItemLineRet.Quantity.GetValue();
-                                    }
-                                    //Get value of UnitOfMeasure
-                                    if(ItemLineRet.UnitOfMeasure != null)
-                                    {
-                                        string UnitOfMeasure115 = (string)ItemLineRet.UnitOfMeasure.GetValue();
-                                    }
-                                    if(ItemLineRet.OverrideUOMSetRef != null)
-                                    {
-                                        //Get value of ListID
-                                        if(ItemLineRet.OverrideUOMSetRef.ListID != null)
-                                        {
-                                            string ListID116 = (string)ItemLineRet.OverrideUOMSetRef.ListID.GetValue();
-                                        }
-                                        //Get value of FullName
-                                        if(ItemLineRet.OverrideUOMSetRef.FullName != null)
-                                        {
-                                            string FullName117 = (string)ItemLineRet.OverrideUOMSetRef.FullName.GetValue();
-                                        }
-                                    }
-                                    //Get value of Cost
-                                    if(ItemLineRet.Cost != null)
-                                    {
-                                        double Cost118 = (double)ItemLineRet.Cost.GetValue();
-                                    }
-                                    //Get value of Amount
-                                    if(ItemLineRet.Amount != null)
-                                    {
-                                        double Amount119 = (double)ItemLineRet.Amount.GetValue();
-                                    }
-                                    if(ItemLineRet.CustomerRef != null)
-                                    {
-                                        //Get value of ListID
-                                        if(ItemLineRet.CustomerRef.ListID != null)
-                                        {
-                                            string ListID120 = (string)ItemLineRet.CustomerRef.ListID.GetValue();
-                                        }
-                                        //Get value of FullName
-                                        if(ItemLineRet.CustomerRef.FullName != null)
-                                        {
-                                            string FullName121 = (string)ItemLineRet.CustomerRef.FullName.GetValue();
-                                        }
-                                    }
-                                    if(ItemLineRet.ClassRef != null)
-                                    {
-                                        //Get value of ListID
-                                        if(ItemLineRet.ClassRef.ListID != null)
-                                        {
-                                            string ListID122 = (string)ItemLineRet.ClassRef.ListID.GetValue();
-                                        }
-                                        //Get value of FullName
-                                        if(ItemLineRet.ClassRef.FullName != null)
-                                        {
-                                            string FullName123 = (string)ItemLineRet.ClassRef.FullName.GetValue();
-                                        }
-                                    }
-                                    //Get value of BillableStatus
-                                    if(ItemLineRet.BillableStatus != null)
-                                    {
-                                        ENBillableStatus BillableStatus124 = (ENBillableStatus)ItemLineRet.BillableStatus.GetValue();
-                                    }
-                                    if(ItemLineRet.SalesRepRef != null)
-                                    {
-                                        //Get value of ListID
-                                        if(ItemLineRet.SalesRepRef.ListID != null)
-                                        {
-                                            string ListID125 = (string)ItemLineRet.SalesRepRef.ListID.GetValue();
-                                        }
-                                        //Get value of FullName
-                                        if(ItemLineRet.SalesRepRef.FullName != null)
-                                        {
-                                            string FullName126 = (string)ItemLineRet.SalesRepRef.FullName.GetValue();
-                                        }
-                                    }
-                                    if(ItemLineRet.DataExtRetList != null)
-                                    {
-                                        for(int i127 = 0; i127 < ItemLineRet.DataExtRetList.Count; i127++)
-                                        {
-                                            IDataExtRet DataExtRet = ItemLineRet.DataExtRetList.GetAt(i127);
-                                            //Get value of OwnerID
-                                            if(DataExtRet.OwnerID != null)
-                                            {
-                                                string OwnerID128 = (string)DataExtRet.OwnerID.GetValue();
-                                            }
-                                            //Get value of DataExtName
-                                            string DataExtName129 = (string)DataExtRet.DataExtName.GetValue();
-                                            //Get value of DataExtType
-                                            ENDataExtType DataExtType130 = (ENDataExtType)DataExtRet.DataExtType.GetValue();
-                                            //Get value of DataExtValue
-                                            string DataExtValue131 = (string)DataExtRet.DataExtValue.GetValue();
-                                        }
-                                    }
-                                }
-                            }
-                            if(ORItemLineRet.ItemGroupLineRet.DataExtList != null)
-                            {
-                                for(int i132 = 0; i132 < ORItemLineRet.ItemGroupLineRet.DataExtList.Count; i132++)
-                                {
-                                    IDataExt DataExt = ORItemLineRet.ItemGroupLineRet.DataExtList.GetAt(i132);
-                                    //Get value of OwnerID
-                                    string OwnerID133 = (string)DataExt.OwnerID.GetValue();
-                                    //Get value of DataExtName
-                                    string DataExtName134 = (string)DataExt.DataExtName.GetValue();
-                                    //Get value of DataExtValue
-                                    string DataExtValue135 = (string)DataExt.DataExtValue.GetValue();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            //Get value of OpenAmount
-            if(BillRet.OpenAmount != null)
-            {
-                double OpenAmount136 = (double)BillRet.OpenAmount.GetValue();
-            }
-            if(BillRet.DataExtRetList != null)
-            {
-                for(int i137 = 0; i137 < BillRet.DataExtRetList.Count; i137++)
-                {
-                    IDataExtRet DataExtRet = BillRet.DataExtRetList.GetAt(i137);
-                    //Get value of OwnerID
-                    if(DataExtRet.OwnerID != null)
-                    {
-                        string OwnerID138 = (string)DataExtRet.OwnerID.GetValue();
-                    }
-                    //Get value of DataExtName
-                    string DataExtName139 = (string)DataExtRet.DataExtName.GetValue();
-                    //Get value of DataExtType
-                    ENDataExtType DataExtType140 = (ENDataExtType)DataExtRet.DataExtType.GetValue();
-                    //Get value of DataExtValue
-                    string DataExtValue141 = (string)DataExtRet.DataExtValue.GetValue();
-                }
-            }
-        }
-
+        public string Status { get; set; }
     }
 
+    /// <summary>
+    /// for transporting bill info and results to/from caller
+    /// </summary>
     public class BillData
     {
         public string VendorFullName { get; set; }
@@ -985,5 +42,1043 @@ namespace QuickBooks
         public string BillFrom4 { get; set; }
         public string BillFrom5 { get; set; }
         public string ExpenseAcct { get; set; }
+        public string APAccount { get; set; }
+        public string ClassRef { get; set; }
+        public string QBStatus { get; set; }
+        public string QBMessage { get; set; }
+    }
+
+    /// <summary>
+    /// encapsulates QuickBooks integration functionality
+    /// </summary>
+    public class QuickBooks
+    {
+        /// <summary>
+        /// for reporting status back to caller
+        /// </summary>
+        public event EventHandler<StatusChangedEventArgs> StatusChanged;
+        protected virtual void OnStatusChanged(StatusChangedEventArgs e)
+        {
+            StatusChanged?.Invoke(this, e);
+        }
+
+        /// <summary>
+        /// adds a list of vendor bills to QuickBooks
+        /// </summary>
+        /// <param name="billList"></param>
+        /// <returns></returns>
+        public bool AddVendorBills(List<BillData> billList)
+        {
+            bool result = false;
+
+            // proceed if any vendor bills
+            if(billList.Count > 0)
+            {
+                bool sessionBegun = false;
+                bool connectionOpen = false;
+                RequestProcessor2 rp = null;
+                XmlDocument reqDoc = null;
+                XmlElement outer = null;
+                XmlElement inner = null;
+                string ticket = null;
+
+                try
+                {
+                    OnStatusChanged(new StatusChangedEventArgs("Building XML document"));
+                    reqDoc = new XmlDocument();
+                    reqDoc.AppendChild(reqDoc.CreateXmlDeclaration("1.0", null, null));
+                    reqDoc.AppendChild(reqDoc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
+
+                    //Create the outer request envelope tag
+                    outer = reqDoc.CreateElement("QBXML");
+                    reqDoc.AppendChild(outer);
+
+                    //Create the inner request envelope & any needed attributes
+                    inner = reqDoc.CreateElement("QBXMLMsgsRq");
+                    outer.AppendChild(inner);
+                    inner.SetAttribute("onError", "continueOnError");
+
+                    //Connect to QuickBooks and begin a session
+                    OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));
+                    rp = new RequestProcessor2();
+                    rp.OpenConnection2("", "AIMM", QBXMLRPConnectionType.localQBD);
+                    connectionOpen = true;
+                    ticket = rp.BeginSession("", QBFileMode.qbFileOpenDoNotCare);
+                    sessionBegun = true;
+
+                    foreach(BillData billData in billList)
+                    {
+                        // submit bill, get response
+                        BuildBillAddRq(reqDoc, inner, billData);
+                        OnStatusChanged(new StatusChangedEventArgs($"Submitting invoice {billData.InvoiceNumber} to QuickBooks"));
+                        string responseStr = rp.ProcessRequest(ticket, reqDoc.OuterXml);
+                        WalkBillAddRs(responseStr, billData);
+
+                    }
+                    result = true;
+                }
+                catch(Exception ex)
+                {
+                    var msg = $"Error occurred adding vendor bills: {ex.Message}";
+                    OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));
+                    LogIt.LogError(msg);
+                    result = false;
+                }
+                finally
+                {
+                    if(sessionBegun)
+                    {
+                        rp.EndSession(ticket);
+                        sessionBegun = false;
+                    }
+
+                    if(connectionOpen)
+                    {
+                        rp.CloseConnection();
+                        connectionOpen = false;
+                    }
+
+                    inner = null;
+                    outer = null;
+                    reqDoc = null;
+                    rp = null;
+                }
+            }
+            return result;
+        }
+
+        private XmlElement MakeSimpleElem(XmlDocument doc, string tagName, string tagVal)
+        {
+            XmlElement elem = doc.CreateElement(tagName);
+            elem.InnerText = tagVal;
+            return elem;
+        }
+
+        void BuildBillAddRq(XmlDocument doc, XmlElement parent, BillData billData)
+        {
+            // create BillAddRq aggregate
+            XmlElement BillAddRq = doc.CreateElement("BillAddRq");
+            parent.AppendChild(BillAddRq);
+
+            // create BillAdd aggregate and fill in field values for it
+            XmlElement BillAdd = doc.CreateElement("BillAdd");
+            BillAddRq.AppendChild(BillAdd);
+
+
+            try
+            {
+                // create VendorRef aggregate and fill in field values for it
+                XmlElement VendorRef = doc.CreateElement("VendorRef");
+                BillAdd.AppendChild(VendorRef);
+                VendorRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.VendorFullName));
+
+                // create VendorAddress aggregate and fill in field values for it
+                XmlElement VendorAddress = doc.CreateElement("VendorAddress");
+                BillAdd.AppendChild(VendorAddress);
+                VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr1", billData.BillFrom1));
+                VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr2", billData.BillFrom2));
+                VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr3", billData.BillFrom3));
+                VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr4", billData.BillFrom4));
+                VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr5", billData.BillFrom5));
+
+                // create APAccountRef aggregate and fill in field values for it
+                XmlElement APAccountRef = doc.CreateElement("APAccountRef");
+                BillAdd.AppendChild(APAccountRef);
+                APAccountRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.APAccount));
+
+                // set field value for TxnDate
+                BillAdd.AppendChild(MakeSimpleElem(doc, "TxnDate", billData.InvoiceDate.ToString("yyyy-MM-dd")));
+
+                // set field value for DueDate
+                BillAdd.AppendChild(MakeSimpleElem(doc, "DueDate", billData.DueDate.ToString("yyyy-MM-dd")));
+                
+                // set field value for RefNumber
+                BillAdd.AppendChild(MakeSimpleElem(doc, "RefNumber", billData.InvoiceNumber));
+
+                //Create TermsRef aggregate and fill in field values for it
+                XmlElement TermsRef = doc.CreateElement("TermsRef");
+                BillAdd.AppendChild(TermsRef);
+                TermsRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.Terms));
+
+                // create ExpenseLineAdd aggregate and fill in field values for it
+                XmlElement ExpenseLineAdd = doc.CreateElement("ExpenseLineAdd");
+                BillAdd.AppendChild(ExpenseLineAdd);
+
+                XmlElement AccountRef = doc.CreateElement("AccountRef");
+                ExpenseLineAdd.AppendChild(AccountRef);
+                AccountRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.ExpenseAcct));
+
+                ExpenseLineAdd.AppendChild(MakeSimpleElem(doc, "Amount", billData.InvoiceAmount.ToString()));
+
+                XmlElement CustomerRef = doc.CreateElement("CustomerRef");
+                ExpenseLineAdd.AppendChild(CustomerRef);
+                CustomerRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.Customer));
+
+                XmlElement ClassRef = doc.CreateElement("ClassRef");
+                ExpenseLineAdd.AppendChild(ClassRef);
+                ClassRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.ClassRef));
+
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+        }
+
+        void WalkBillAddRs(string response, BillData billData)
+        {
+            //Parse the response XML string into an XmlDocument
+            XmlDocument responseXmlDoc = new XmlDocument();
+            responseXmlDoc.LoadXml(response);
+
+            //Get the response for our request
+            XmlNodeList BillAddRsList = responseXmlDoc.GetElementsByTagName("BillAddRs");
+            if(BillAddRsList.Count == 1) //Should always be true since we only did one request in this sample
+            {
+                XmlNode responseNode = BillAddRsList.Item(0);
+                
+                // get the status code, info, and severity
+                XmlAttributeCollection rsAttributes = responseNode.Attributes;
+                string statusCode = rsAttributes.GetNamedItem("statusCode").Value;
+                string statusSeverity = rsAttributes.GetNamedItem("statusSeverity").Value;
+                string statusMessage = rsAttributes.GetNamedItem("statusMessage").Value;
+
+                billData.QBStatus = statusSeverity;
+                billData.QBMessage = statusMessage;
+
+                // this block is used if we need to iterate results and get data
+                ////status code = 0 all OK, > 0 is error
+                //if(Convert.ToInt32(statusCode) >= 0)
+                //{
+                //    XmlNodeList BillRetList = responseNode.SelectNodes("//BillRet");//XPath Query
+                //    for(int i = 0; i < BillRetList.Count; i++)
+                //    {
+                //        XmlNode BillRet = BillRetList.Item(i);
+                //        WalkBillRet(BillRet);
+                //    }
+                //}
+                rsAttributes = null;
+            }
+            BillAddRsList = null;
+            responseXmlDoc = null;
+        }
+
+        /// <summary>
+        /// This is for pulling out individual fields from response if needed.
+        /// We are not currently using this.
+        /// </summary>
+        /// <param name="BillRet"></param>
+        void WalkBillRet(XmlNode BillRet)
+        {
+            if(BillRet == null)
+                return;
+
+            //Go through all the elements of BillRet
+            //Get value of TxnID
+            string TxnID = BillRet.SelectSingleNode("./TxnID").InnerText;
+            //Get value of TimeCreated
+            string TimeCreated = BillRet.SelectSingleNode("./TimeCreated").InnerText;
+            //Get value of TimeModified
+            string TimeModified = BillRet.SelectSingleNode("./TimeModified").InnerText;
+            //Get value of EditSequence
+            string EditSequence = BillRet.SelectSingleNode("./EditSequence").InnerText;
+            //Get value of TxnNumber
+            if(BillRet.SelectSingleNode("./TxnNumber") != null)
+            {
+                string TxnNumber = BillRet.SelectSingleNode("./TxnNumber").InnerText;
+            }
+            //Get all field values for VendorRef aggregate
+            //Get value of ListID
+            if(BillRet.SelectSingleNode("./VendorRef/ListID") != null)
+            {
+                string ListID = BillRet.SelectSingleNode("./VendorRef/ListID").InnerText;
+            }
+            //Get value of FullName
+            if(BillRet.SelectSingleNode("./VendorRef/FullName") != null)
+            {
+                string FullName = BillRet.SelectSingleNode("./VendorRef/FullName").InnerText;
+            }
+            //Done with field values for VendorRef aggregate
+
+            //Get all field values for VendorAddress aggregate
+            XmlNode VendorAddress = BillRet.SelectSingleNode("./VendorAddress");
+            if(VendorAddress != null)
+            {
+                //Get value of Addr1
+                if(BillRet.SelectSingleNode("./VendorAddress/Addr1") != null)
+                {
+                    string Addr1 = BillRet.SelectSingleNode("./VendorAddress/Addr1").InnerText;
+                }
+                //Get value of Addr2
+                if(BillRet.SelectSingleNode("./VendorAddress/Addr2") != null)
+                {
+                    string Addr2 = BillRet.SelectSingleNode("./VendorAddress/Addr2").InnerText;
+                }
+                //Get value of Addr3
+                if(BillRet.SelectSingleNode("./VendorAddress/Addr3") != null)
+                {
+                    string Addr3 = BillRet.SelectSingleNode("./VendorAddress/Addr3").InnerText;
+                }
+                //Get value of Addr4
+                if(BillRet.SelectSingleNode("./VendorAddress/Addr4") != null)
+                {
+                    string Addr4 = BillRet.SelectSingleNode("./VendorAddress/Addr4").InnerText;
+                }
+                //Get value of Addr5
+                if(BillRet.SelectSingleNode("./VendorAddress/Addr5") != null)
+                {
+                    string Addr5 = BillRet.SelectSingleNode("./VendorAddress/Addr5").InnerText;
+                }
+                //Get value of City
+                if(BillRet.SelectSingleNode("./VendorAddress/City") != null)
+                {
+                    string City = BillRet.SelectSingleNode("./VendorAddress/City").InnerText;
+                }
+                //Get value of State
+                if(BillRet.SelectSingleNode("./VendorAddress/State") != null)
+                {
+                    string State = BillRet.SelectSingleNode("./VendorAddress/State").InnerText;
+                }
+                //Get value of PostalCode
+                if(BillRet.SelectSingleNode("./VendorAddress/PostalCode") != null)
+                {
+                    string PostalCode = BillRet.SelectSingleNode("./VendorAddress/PostalCode").InnerText;
+                }
+                //Get value of Country
+                if(BillRet.SelectSingleNode("./VendorAddress/Country") != null)
+                {
+                    string Country = BillRet.SelectSingleNode("./VendorAddress/Country").InnerText;
+                }
+                //Get value of Note
+                if(BillRet.SelectSingleNode("./VendorAddress/Note") != null)
+                {
+                    string Note = BillRet.SelectSingleNode("./VendorAddress/Note").InnerText;
+                }
+            }
+            //Done with field values for VendorAddress aggregate
+
+            //Get all field values for APAccountRef aggregate
+            XmlNode APAccountRef = BillRet.SelectSingleNode("./APAccountRef");
+            if(APAccountRef != null)
+            {
+                //Get value of ListID
+                if(BillRet.SelectSingleNode("./APAccountRef/ListID") != null)
+                {
+                    string ListID = BillRet.SelectSingleNode("./APAccountRef/ListID").InnerText;
+                }
+                //Get value of FullName
+                if(BillRet.SelectSingleNode("./APAccountRef/FullName") != null)
+                {
+                    string FullName = BillRet.SelectSingleNode("./APAccountRef/FullName").InnerText;
+                }
+            }
+            //Done with field values for APAccountRef aggregate
+
+            //Get value of TxnDate
+            string TxnDate = BillRet.SelectSingleNode("./TxnDate").InnerText;
+            //Get value of DueDate
+            if(BillRet.SelectSingleNode("./DueDate") != null)
+            {
+                string DueDate = BillRet.SelectSingleNode("./DueDate").InnerText;
+            }
+            //Get value of AmountDue
+            string AmountDue = BillRet.SelectSingleNode("./AmountDue").InnerText;
+            //Get all field values for CurrencyRef aggregate
+            XmlNode CurrencyRef = BillRet.SelectSingleNode("./CurrencyRef");
+            if(CurrencyRef != null)
+            {
+                //Get value of ListID
+                if(BillRet.SelectSingleNode("./CurrencyRef/ListID") != null)
+                {
+                    string ListID = BillRet.SelectSingleNode("./CurrencyRef/ListID").InnerText;
+                }
+                //Get value of FullName
+                if(BillRet.SelectSingleNode("./CurrencyRef/FullName") != null)
+                {
+                    string FullName = BillRet.SelectSingleNode("./CurrencyRef/FullName").InnerText;
+                }
+            }
+            //Done with field values for CurrencyRef aggregate
+
+            //Get value of ExchangeRate
+            if(BillRet.SelectSingleNode("./ExchangeRate") != null)
+            {
+                string ExchangeRate = BillRet.SelectSingleNode("./ExchangeRate").InnerText;
+            }
+            //Get value of AmountDueInHomeCurrency
+            if(BillRet.SelectSingleNode("./AmountDueInHomeCurrency") != null)
+            {
+                string AmountDueInHomeCurrency = BillRet.SelectSingleNode("./AmountDueInHomeCurrency").InnerText;
+            }
+            //Get value of RefNumber
+            if(BillRet.SelectSingleNode("./RefNumber") != null)
+            {
+                string RefNumber = BillRet.SelectSingleNode("./RefNumber").InnerText;
+            }
+            //Get all field values for TermsRef aggregate
+            XmlNode TermsRef = BillRet.SelectSingleNode("./TermsRef");
+            if(TermsRef != null)
+            {
+                //Get value of ListID
+                if(BillRet.SelectSingleNode("./TermsRef/ListID") != null)
+                {
+                    string ListID = BillRet.SelectSingleNode("./TermsRef/ListID").InnerText;
+                }
+                //Get value of FullName
+                if(BillRet.SelectSingleNode("./TermsRef/FullName") != null)
+                {
+                    string FullName = BillRet.SelectSingleNode("./TermsRef/FullName").InnerText;
+                }
+            }
+            //Done with field values for TermsRef aggregate
+
+            //Get value of Memo
+            if(BillRet.SelectSingleNode("./Memo") != null)
+            {
+                string Memo = BillRet.SelectSingleNode("./Memo").InnerText;
+            }
+            //Get value of IsPaid
+            if(BillRet.SelectSingleNode("./IsPaid") != null)
+            {
+                string IsPaid = BillRet.SelectSingleNode("./IsPaid").InnerText;
+            }
+            //Get value of ExternalGUID
+            if(BillRet.SelectSingleNode("./ExternalGUID") != null)
+            {
+                string ExternalGUID = BillRet.SelectSingleNode("./ExternalGUID").InnerText;
+            }
+            //Walk list of LinkedTxn aggregates
+            XmlNodeList LinkedTxnList = BillRet.SelectNodes("./LinkedTxn");
+            if(LinkedTxnList != null)
+            {
+                for(int i = 0; i < LinkedTxnList.Count; i++)
+                {
+                    XmlNode LinkedTxn = LinkedTxnList.Item(i);
+                    //Get value of TxnID
+                    string TxnID2 = LinkedTxn.SelectSingleNode("./TxnID").InnerText;
+                    //Get value of TxnType
+                    string TxnType = LinkedTxn.SelectSingleNode("./TxnType").InnerText;
+                    //Get value of TxnDate
+                    string TxnDate2 = LinkedTxn.SelectSingleNode("./TxnDate").InnerText;
+                    //Get value of RefNumber
+                    if(LinkedTxn.SelectSingleNode("./RefNumber") != null)
+                    {
+                        string RefNumber = LinkedTxn.SelectSingleNode("./RefNumber").InnerText;
+                    }
+                    //Get value of LinkType
+                    if(LinkedTxn.SelectSingleNode("./LinkType") != null)
+                    {
+                        string LinkType = LinkedTxn.SelectSingleNode("./LinkType").InnerText;
+                    }
+                    //Get value of Amount
+                    string Amount = LinkedTxn.SelectSingleNode("./Amount").InnerText;
+                }
+            }
+
+            //Walk list of ExpenseLineRet aggregates
+            XmlNodeList ExpenseLineRetList = BillRet.SelectNodes("./ExpenseLineRet");
+            if(ExpenseLineRetList != null)
+            {
+                for(int i = 0; i < ExpenseLineRetList.Count; i++)
+                {
+                    XmlNode ExpenseLineRet = ExpenseLineRetList.Item(i);
+                    //Get value of TxnLineID
+                    string TxnLineID = ExpenseLineRet.SelectSingleNode("./TxnLineID").InnerText;
+                    //Get all field values for AccountRef aggregate
+                    XmlNode AccountRef = ExpenseLineRet.SelectSingleNode("./AccountRef");
+                    if(AccountRef != null)
+                    {
+                        //Get value of ListID
+                        if(ExpenseLineRet.SelectSingleNode("./AccountRef/ListID") != null)
+                        {
+                            string ListID = ExpenseLineRet.SelectSingleNode("./AccountRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(ExpenseLineRet.SelectSingleNode("./AccountRef/FullName") != null)
+                        {
+                            string FullName = ExpenseLineRet.SelectSingleNode("./AccountRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for AccountRef aggregate
+
+                    //Get value of Amount
+                    if(ExpenseLineRet.SelectSingleNode("./Amount") != null)
+                    {
+                        string Amount = ExpenseLineRet.SelectSingleNode("./Amount").InnerText;
+                    }
+                    //Get value of Memo
+                    if(ExpenseLineRet.SelectSingleNode("./Memo") != null)
+                    {
+                        string Memo = ExpenseLineRet.SelectSingleNode("./Memo").InnerText;
+                    }
+                    //Get all field values for CustomerRef aggregate
+                    XmlNode CustomerRef = ExpenseLineRet.SelectSingleNode("./CustomerRef");
+                    if(CustomerRef != null)
+                    {
+                        //Get value of ListID
+                        if(ExpenseLineRet.SelectSingleNode("./CustomerRef/ListID") != null)
+                        {
+                            string ListID = ExpenseLineRet.SelectSingleNode("./CustomerRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(ExpenseLineRet.SelectSingleNode("./CustomerRef/FullName") != null)
+                        {
+                            string FullName = ExpenseLineRet.SelectSingleNode("./CustomerRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for CustomerRef aggregate
+
+                    //Get all field values for ClassRef aggregate
+                    XmlNode ClassRef = ExpenseLineRet.SelectSingleNode("./ClassRef");
+                    if(ClassRef != null)
+                    {
+                        //Get value of ListID
+                        if(ExpenseLineRet.SelectSingleNode("./ClassRef/ListID") != null)
+                        {
+                            string ListID = ExpenseLineRet.SelectSingleNode("./ClassRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(ExpenseLineRet.SelectSingleNode("./ClassRef/FullName") != null)
+                        {
+                            string FullName = ExpenseLineRet.SelectSingleNode("./ClassRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for ClassRef aggregate
+
+                    //Get value of BillableStatus
+                    if(ExpenseLineRet.SelectSingleNode("./BillableStatus") != null)
+                    {
+                        string BillableStatus = ExpenseLineRet.SelectSingleNode("./BillableStatus").InnerText;
+                    }
+                    //Get all field values for SalesRepRef aggregate
+                    XmlNode SalesRepRef = ExpenseLineRet.SelectSingleNode("./SalesRepRef");
+                    if(SalesRepRef != null)
+                    {
+                        //Get value of ListID
+                        if(ExpenseLineRet.SelectSingleNode("./SalesRepRef/ListID") != null)
+                        {
+                            string ListID = ExpenseLineRet.SelectSingleNode("./SalesRepRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(ExpenseLineRet.SelectSingleNode("./SalesRepRef/FullName") != null)
+                        {
+                            string FullName = ExpenseLineRet.SelectSingleNode("./SalesRepRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for SalesRepRef aggregate
+
+                    //Walk list of DataExtRet aggregates
+                    XmlNodeList DataExtRetList = ExpenseLineRet.SelectNodes("./DataExtRet");
+                    if(DataExtRetList != null)
+                    {
+                        for(int i1 = 0; i1 < DataExtRetList.Count; i1++)
+                        {
+                            XmlNode DataExtRet = DataExtRetList.Item(i1);
+                            //Get value of OwnerID
+                            if(DataExtRet.SelectSingleNode("./OwnerID") != null)
+                            {
+                                string OwnerID = DataExtRet.SelectSingleNode("./OwnerID").InnerText;
+                            }
+                            //Get value of DataExtName
+                            string DataExtName = DataExtRet.SelectSingleNode("./DataExtName").InnerText;
+                            //Get value of DataExtType
+                            string DataExtType = DataExtRet.SelectSingleNode("./DataExtType").InnerText;
+                            //Get value of DataExtValue
+                            string DataExtValue = DataExtRet.SelectSingleNode("./DataExtValue").InnerText;
+                        }
+                    }
+
+                }
+            }
+
+            XmlNodeList ORItemLineRetListChildren = BillRet.SelectNodes("./*");
+            for(int i = 0; i < ORItemLineRetListChildren.Count; i++)
+            {
+                XmlNode Child = ORItemLineRetListChildren.Item(i);
+                if(Child.Name == "ItemLineRet")
+                {
+                    //Get value of TxnLineID
+                    string TxnLineID = Child.SelectSingleNode("./TxnLineID").InnerText;
+                    //Get all field values for ItemRef aggregate
+                    XmlNode ItemRef = Child.SelectSingleNode("./ItemRef");
+                    if(ItemRef != null)
+                    {
+                        //Get value of ListID
+                        if(Child.SelectSingleNode("./ItemRef/ListID") != null)
+                        {
+                            string ListID = Child.SelectSingleNode("./ItemRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(Child.SelectSingleNode("./ItemRef/FullName") != null)
+                        {
+                            string FullName = Child.SelectSingleNode("./ItemRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for ItemRef aggregate
+
+                    //Get all field values for InventorySiteRef aggregate
+                    XmlNode InventorySiteRef = Child.SelectSingleNode("./InventorySiteRef");
+                    if(InventorySiteRef != null)
+                    {
+                        //Get value of ListID
+                        if(Child.SelectSingleNode("./InventorySiteRef/ListID") != null)
+                        {
+                            string ListID = Child.SelectSingleNode("./InventorySiteRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(Child.SelectSingleNode("./InventorySiteRef/FullName") != null)
+                        {
+                            string FullName = Child.SelectSingleNode("./InventorySiteRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for InventorySiteRef aggregate
+
+                    //Get all field values for InventorySiteLocationRef aggregate
+                    XmlNode InventorySiteLocationRef = Child.SelectSingleNode("./InventorySiteLocationRef");
+                    if(InventorySiteLocationRef != null)
+                    {
+                        //Get value of ListID
+                        if(Child.SelectSingleNode("./InventorySiteLocationRef/ListID") != null)
+                        {
+                            string ListID = Child.SelectSingleNode("./InventorySiteLocationRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(Child.SelectSingleNode("./InventorySiteLocationRef/FullName") != null)
+                        {
+                            string FullName = Child.SelectSingleNode("./InventorySiteLocationRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for InventorySiteLocationRef aggregate
+
+                    XmlNodeList ORSerialLotNumberChildren = Child.SelectNodes("./*");
+                    for(int i1 = 0; i1 < ORSerialLotNumberChildren.Count; i1++)
+                    {
+                        XmlNode Child1 = ORSerialLotNumberChildren.Item(i1);
+                        if(Child1.Name == "SerialNumber")
+                        {
+                        }
+
+                        if(Child1.Name == "LotNumber")
+                        {
+                        }
+
+                    }
+
+                    //Get value of Desc
+                    if(Child.SelectSingleNode("./Desc") != null)
+                    {
+                        string Desc = Child.SelectSingleNode("./Desc").InnerText;
+                    }
+                    //Get value of Quantity
+                    if(Child.SelectSingleNode("./Quantity") != null)
+                    {
+                        string Quantity = Child.SelectSingleNode("./Quantity").InnerText;
+                    }
+                    //Get value of UnitOfMeasure
+                    if(Child.SelectSingleNode("./UnitOfMeasure") != null)
+                    {
+                        string UnitOfMeasure = Child.SelectSingleNode("./UnitOfMeasure").InnerText;
+                    }
+                    //Get all field values for OverrideUOMSetRef aggregate
+                    XmlNode OverrideUOMSetRef = Child.SelectSingleNode("./OverrideUOMSetRef");
+                    if(OverrideUOMSetRef != null)
+                    {
+                        //Get value of ListID
+                        if(Child.SelectSingleNode("./OverrideUOMSetRef/ListID") != null)
+                        {
+                            string ListID = Child.SelectSingleNode("./OverrideUOMSetRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(Child.SelectSingleNode("./OverrideUOMSetRef/FullName") != null)
+                        {
+                            string FullName = Child.SelectSingleNode("./OverrideUOMSetRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for OverrideUOMSetRef aggregate
+
+                    //Get value of Cost
+                    if(Child.SelectSingleNode("./Cost") != null)
+                    {
+                        string Cost = Child.SelectSingleNode("./Cost").InnerText;
+                    }
+                    //Get value of Amount
+                    if(Child.SelectSingleNode("./Amount") != null)
+                    {
+                        string Amount = Child.SelectSingleNode("./Amount").InnerText;
+                    }
+                    //Get all field values for CustomerRef aggregate
+                    XmlNode CustomerRef = Child.SelectSingleNode("./CustomerRef");
+                    if(CustomerRef != null)
+                    {
+                        //Get value of ListID
+                        if(Child.SelectSingleNode("./CustomerRef/ListID") != null)
+                        {
+                            string ListID = Child.SelectSingleNode("./CustomerRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(Child.SelectSingleNode("./CustomerRef/FullName") != null)
+                        {
+                            string FullName = Child.SelectSingleNode("./CustomerRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for CustomerRef aggregate
+
+                    //Get all field values for ClassRef aggregate
+                    XmlNode ClassRef = Child.SelectSingleNode("./ClassRef");
+                    if(ClassRef != null)
+                    {
+                        //Get value of ListID
+                        if(Child.SelectSingleNode("./ClassRef/ListID") != null)
+                        {
+                            string ListID = Child.SelectSingleNode("./ClassRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(Child.SelectSingleNode("./ClassRef/FullName") != null)
+                        {
+                            string FullName = Child.SelectSingleNode("./ClassRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for ClassRef aggregate
+
+                    //Get value of BillableStatus
+                    if(Child.SelectSingleNode("./BillableStatus") != null)
+                    {
+                        string BillableStatus = Child.SelectSingleNode("./BillableStatus").InnerText;
+                    }
+                    //Get all field values for SalesRepRef aggregate
+                    XmlNode SalesRepRef = Child.SelectSingleNode("./SalesRepRef");
+                    if(SalesRepRef != null)
+                    {
+                        //Get value of ListID
+                        if(Child.SelectSingleNode("./SalesRepRef/ListID") != null)
+                        {
+                            string ListID = Child.SelectSingleNode("./SalesRepRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(Child.SelectSingleNode("./SalesRepRef/FullName") != null)
+                        {
+                            string FullName = Child.SelectSingleNode("./SalesRepRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for SalesRepRef aggregate
+
+                    //Walk list of DataExtRet aggregates
+                    XmlNodeList DataExtRetList2 = Child.SelectNodes("./DataExtRet");
+                    if(DataExtRetList2 != null)
+                    {
+                        for(int i2 = 0; i2 < DataExtRetList2.Count; i2++)
+                        {
+                            XmlNode DataExtRet = DataExtRetList2.Item(i2);
+                            //Get value of OwnerID
+                            if(DataExtRet.SelectSingleNode("./OwnerID") != null)
+                            {
+                                string OwnerID = DataExtRet.SelectSingleNode("./OwnerID").InnerText;
+                            }
+                            //Get value of DataExtName
+                            string DataExtName = DataExtRet.SelectSingleNode("./DataExtName").InnerText;
+                            //Get value of DataExtType
+                            string DataExtType = DataExtRet.SelectSingleNode("./DataExtType").InnerText;
+                            //Get value of DataExtValue
+                            string DataExtValue = DataExtRet.SelectSingleNode("./DataExtValue").InnerText;
+                        }
+                    }
+
+                }
+
+                if(Child.Name == "ItemGroupLineRet")
+                {
+                    //Get value of TxnLineID
+                    string TxnLineID1 = Child.SelectSingleNode("./TxnLineID").InnerText;
+                    //Get all field values for ItemGroupRef aggregate
+                    //Get value of ListID
+                    if(Child.SelectSingleNode("./ItemGroupRef/ListID") != null)
+                    {
+                        string ListID = Child.SelectSingleNode("./ItemGroupRef/ListID").InnerText;
+                    }
+                    //Get value of FullName
+                    if(Child.SelectSingleNode("./ItemGroupRef/FullName") != null)
+                    {
+                        string FullName = Child.SelectSingleNode("./ItemGroupRef/FullName").InnerText;
+                    }
+                    //Done with field values for ItemGroupRef aggregate
+
+                    //Get value of Desc
+                    if(Child.SelectSingleNode("./Desc") != null)
+                    {
+                        string Desc = Child.SelectSingleNode("./Desc").InnerText;
+                    }
+                    //Get value of Quantity
+                    if(Child.SelectSingleNode("./Quantity") != null)
+                    {
+                        string Quantity = Child.SelectSingleNode("./Quantity").InnerText;
+                    }
+                    //Get value of UnitOfMeasure
+                    if(Child.SelectSingleNode("./UnitOfMeasure") != null)
+                    {
+                        string UnitOfMeasure = Child.SelectSingleNode("./UnitOfMeasure").InnerText;
+                    }
+                    //Get all field values for OverrideUOMSetRef aggregate
+                    XmlNode OverrideUOMSetRef1 = Child.SelectSingleNode("./OverrideUOMSetRef");
+                    if(OverrideUOMSetRef1 != null)
+                    {
+                        //Get value of ListID
+                        if(Child.SelectSingleNode("./OverrideUOMSetRef/ListID") != null)
+                        {
+                            string ListID = Child.SelectSingleNode("./OverrideUOMSetRef/ListID").InnerText;
+                        }
+                        //Get value of FullName
+                        if(Child.SelectSingleNode("./OverrideUOMSetRef/FullName") != null)
+                        {
+                            string FullName = Child.SelectSingleNode("./OverrideUOMSetRef/FullName").InnerText;
+                        }
+                    }
+                    //Done with field values for OverrideUOMSetRef aggregate
+
+                    //Get value of TotalAmount
+                    string TotalAmount = Child.SelectSingleNode("./TotalAmount").InnerText;
+                    //Walk list of ItemLineRet aggregates
+                    XmlNodeList ItemLineRetList = Child.SelectNodes("./ItemLineRet");
+                    if(ItemLineRetList != null)
+                    {
+                        for(int i3 = 0; i3 < ItemLineRetList.Count; i3++)
+                        {
+                            XmlNode ItemLineRet = ItemLineRetList.Item(i3);
+                            //Get value of TxnLineID
+                            string TxnLineID2 = ItemLineRet.SelectSingleNode("./TxnLineID").InnerText;
+                            //Get all field values for ItemRef aggregate
+                            XmlNode ItemRef = ItemLineRet.SelectSingleNode("./ItemRef");
+                            if(ItemRef != null)
+                            {
+                                //Get value of ListID
+                                if(ItemLineRet.SelectSingleNode("./ItemRef/ListID") != null)
+                                {
+                                    string ListID = ItemLineRet.SelectSingleNode("./ItemRef/ListID").InnerText;
+                                }
+                                //Get value of FullName
+                                if(ItemLineRet.SelectSingleNode("./ItemRef/FullName") != null)
+                                {
+                                    string FullName = ItemLineRet.SelectSingleNode("./ItemRef/FullName").InnerText;
+                                }
+                            }
+                            //Done with field values for ItemRef aggregate
+
+                            //Get all field values for InventorySiteRef aggregate
+                            XmlNode InventorySiteRef = ItemLineRet.SelectSingleNode("./InventorySiteRef");
+                            if(InventorySiteRef != null)
+                            {
+                                //Get value of ListID
+                                if(ItemLineRet.SelectSingleNode("./InventorySiteRef/ListID") != null)
+                                {
+                                    string ListID = ItemLineRet.SelectSingleNode("./InventorySiteRef/ListID").InnerText;
+                                }
+                                //Get value of FullName
+                                if(ItemLineRet.SelectSingleNode("./InventorySiteRef/FullName") != null)
+                                {
+                                    string FullName = ItemLineRet.SelectSingleNode("./InventorySiteRef/FullName").InnerText;
+                                }
+                            }
+                            //Done with field values for InventorySiteRef aggregate
+
+                            //Get all field values for InventorySiteLocationRef aggregate
+                            XmlNode InventorySiteLocationRef = ItemLineRet.SelectSingleNode("./InventorySiteLocationRef");
+                            if(InventorySiteLocationRef != null)
+                            {
+                                //Get value of ListID
+                                if(ItemLineRet.SelectSingleNode("./InventorySiteLocationRef/ListID") != null)
+                                {
+                                    string ListID = ItemLineRet.SelectSingleNode("./InventorySiteLocationRef/ListID").InnerText;
+                                }
+                                //Get value of FullName
+                                if(ItemLineRet.SelectSingleNode("./InventorySiteLocationRef/FullName") != null)
+                                {
+                                    string FullName = ItemLineRet.SelectSingleNode("./InventorySiteLocationRef/FullName").InnerText;
+                                }
+                            }
+                            //Done with field values for InventorySiteLocationRef aggregate
+
+                            XmlNodeList ORSerialLotNumberChildren = ItemLineRet.SelectNodes("./*");
+                            for(int i4 = 0; i4 < ORSerialLotNumberChildren.Count; i4++)
+                            {
+                                XmlNode Child2 = ORSerialLotNumberChildren.Item(i4);
+                                if(Child2.Name == "SerialNumber")
+                                {
+                                }
+
+                                if(Child2.Name == "LotNumber")
+                                {
+                                }
+
+                            }
+
+                            //Get value of Desc
+                            if(ItemLineRet.SelectSingleNode("./Desc") != null)
+                            {
+                                string Desc = ItemLineRet.SelectSingleNode("./Desc").InnerText;
+                            }
+                            //Get value of Quantity
+                            if(ItemLineRet.SelectSingleNode("./Quantity") != null)
+                            {
+                                string Quantity = ItemLineRet.SelectSingleNode("./Quantity").InnerText;
+                            }
+                            //Get value of UnitOfMeasure
+                            if(ItemLineRet.SelectSingleNode("./UnitOfMeasure") != null)
+                            {
+                                string UnitOfMeasure = ItemLineRet.SelectSingleNode("./UnitOfMeasure").InnerText;
+                            }
+                            //Get all field values for OverrideUOMSetRef aggregate
+                            XmlNode OverrideUOMSetRef = ItemLineRet.SelectSingleNode("./OverrideUOMSetRef");
+                            if(OverrideUOMSetRef != null)
+                            {
+                                //Get value of ListID
+                                if(ItemLineRet.SelectSingleNode("./OverrideUOMSetRef/ListID") != null)
+                                {
+                                    string ListID = ItemLineRet.SelectSingleNode("./OverrideUOMSetRef/ListID").InnerText;
+                                }
+                                //Get value of FullName
+                                if(ItemLineRet.SelectSingleNode("./OverrideUOMSetRef/FullName") != null)
+                                {
+                                    string FullName = ItemLineRet.SelectSingleNode("./OverrideUOMSetRef/FullName").InnerText;
+                                }
+                            }
+                            //Done with field values for OverrideUOMSetRef aggregate
+
+                            //Get value of Cost
+                            if(ItemLineRet.SelectSingleNode("./Cost") != null)
+                            {
+                                string Cost = ItemLineRet.SelectSingleNode("./Cost").InnerText;
+                            }
+                            //Get value of Amount
+                            if(ItemLineRet.SelectSingleNode("./Amount") != null)
+                            {
+                                string Amount = ItemLineRet.SelectSingleNode("./Amount").InnerText;
+                            }
+                            //Get all field values for CustomerRef aggregate
+                            XmlNode CustomerRef = ItemLineRet.SelectSingleNode("./CustomerRef");
+                            if(CustomerRef != null)
+                            {
+                                //Get value of ListID
+                                if(ItemLineRet.SelectSingleNode("./CustomerRef/ListID") != null)
+                                {
+                                    string ListID = ItemLineRet.SelectSingleNode("./CustomerRef/ListID").InnerText;
+                                }
+                                //Get value of FullName
+                                if(ItemLineRet.SelectSingleNode("./CustomerRef/FullName") != null)
+                                {
+                                    string FullName = ItemLineRet.SelectSingleNode("./CustomerRef/FullName").InnerText;
+                                }
+                            }
+                            //Done with field values for CustomerRef aggregate
+
+                            //Get all field values for ClassRef aggregate
+                            XmlNode ClassRef = ItemLineRet.SelectSingleNode("./ClassRef");
+                            if(ClassRef != null)
+                            {
+                                //Get value of ListID
+                                if(ItemLineRet.SelectSingleNode("./ClassRef/ListID") != null)
+                                {
+                                    string ListID = ItemLineRet.SelectSingleNode("./ClassRef/ListID").InnerText;
+                                }
+                                //Get value of FullName
+                                if(ItemLineRet.SelectSingleNode("./ClassRef/FullName") != null)
+                                {
+                                    string FullName = ItemLineRet.SelectSingleNode("./ClassRef/FullName").InnerText;
+                                }
+                            }
+                            //Done with field values for ClassRef aggregate
+
+                            //Get value of BillableStatus
+                            if(ItemLineRet.SelectSingleNode("./BillableStatus") != null)
+                            {
+                                string BillableStatus = ItemLineRet.SelectSingleNode("./BillableStatus").InnerText;
+                            }
+                            //Get all field values for SalesRepRef aggregate
+                            XmlNode SalesRepRef = ItemLineRet.SelectSingleNode("./SalesRepRef");
+                            if(SalesRepRef != null)
+                            {
+                                //Get value of ListID
+                                if(ItemLineRet.SelectSingleNode("./SalesRepRef/ListID") != null)
+                                {
+                                    string ListID = ItemLineRet.SelectSingleNode("./SalesRepRef/ListID").InnerText;
+                                }
+                                //Get value of FullName
+                                if(ItemLineRet.SelectSingleNode("./SalesRepRef/FullName") != null)
+                                {
+                                    string FullName = ItemLineRet.SelectSingleNode("./SalesRepRef/FullName").InnerText;
+                                }
+                            }
+                            //Done with field values for SalesRepRef aggregate
+
+                            //Walk list of DataExtRet aggregates
+                            XmlNodeList DataExtRetList3 = ItemLineRet.SelectNodes("./DataExtRet");
+                            if(DataExtRetList3 != null)
+                            {
+                                for(int i4 = 0; i4 < DataExtRetList3.Count; i4++)
+                                {
+                                    XmlNode DataExtRet = DataExtRetList3.Item(i4);
+                                    //Get value of OwnerID
+                                    if(DataExtRet.SelectSingleNode("./OwnerID") != null)
+                                    {
+                                        string OwnerID = DataExtRet.SelectSingleNode("./OwnerID").InnerText;
+                                    }
+                                    //Get value of DataExtName
+                                    string DataExtName = DataExtRet.SelectSingleNode("./DataExtName").InnerText;
+                                    //Get value of DataExtType
+                                    string DataExtType = DataExtRet.SelectSingleNode("./DataExtType").InnerText;
+                                    //Get value of DataExtValue
+                                    string DataExtValue = DataExtRet.SelectSingleNode("./DataExtValue").InnerText;
+                                }
+                            }
+
+                        }
+                    }
+
+                    //Walk list of DataExt aggregates
+                    XmlNodeList DataExtList = Child.SelectNodes("./DataExt");
+                    if(DataExtList != null)
+                    {
+                        for(int i5 = 0; i5 < DataExtList.Count; i5++)
+                        {
+                            XmlNode DataExt = DataExtList.Item(i5);
+                            //Get value of OwnerID
+                            string OwnerID = DataExt.SelectSingleNode("./OwnerID").InnerText;
+                            //Get value of DataExtName
+                            string DataExtName = DataExt.SelectSingleNode("./DataExtName").InnerText;
+                            //Get value of DataExtValue
+                            string DataExtValue = DataExt.SelectSingleNode("./DataExtValue").InnerText;
+                        }
+                    }
+
+                }
+
+            }
+
+            //Get value of OpenAmount
+            if(BillRet.SelectSingleNode("./OpenAmount") != null)
+            {
+                string OpenAmount = BillRet.SelectSingleNode("./OpenAmount").InnerText;
+            }
+            //Walk list of DataExtRet aggregates
+            XmlNodeList DataExtRetList4 = BillRet.SelectNodes("./DataExtRet");
+            if(DataExtRetList4 != null)
+            {
+                for(int i = 0; i < DataExtRetList4.Count; i++)
+                {
+                    XmlNode DataExtRet = DataExtRetList4.Item(i);
+                    //Get value of OwnerID
+                    if(DataExtRet.SelectSingleNode("./OwnerID") != null)
+                    {
+                        string OwnerID = DataExtRet.SelectSingleNode("./OwnerID").InnerText;
+                    }
+                    //Get value of DataExtName
+                    string DataExtName = DataExtRet.SelectSingleNode("./DataExtName").InnerText;
+                    //Get value of DataExtType
+                    string DataExtType = DataExtRet.SelectSingleNode("./DataExtType").InnerText;
+                    //Get value of DataExtValue
+                    string DataExtValue = DataExtRet.SelectSingleNode("./DataExtValue").InnerText;
+                }
+            }
+
+        }
+
     }
 }

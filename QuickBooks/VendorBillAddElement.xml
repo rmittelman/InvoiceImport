@@ -1,0 +1,35 @@
+﻿<BillAddRq>
+  <BillAdd>
+    <VendorRef>
+      <FullName></FullName>
+    </VendorRef>
+    <VendorAddress>
+      <Addr1/>
+      <Addr2/>
+      <Addr3/>
+      <Addr4/>
+      <Addr5/>
+    </VendorAddress>
+    <APAccountRef>
+      <FullName/>
+    </APAccountRef>
+    <TxnDate/>
+    <DueDate/>
+    <RefNumber/>
+    <TermsRef>
+      <FullName/>
+    </TermsRef>
+    <ExpenseLineAdd>
+      <AccountRef>
+        <FullName/>
+      </AccountRef>
+      <Amount/>
+      <CustomerRef>
+        <FullName/>
+      </CustomerRef>
+      <ClassRef>
+        <FullName/>
+      </ClassRef>
+    </ExpenseLineAdd>
+  </BillAdd>
+</BillAddRq>

@@ -41,6 +41,8 @@
             this.label3 = new System.Windows.Forms.Label();
             this.label4 = new System.Windows.Forms.Label();
             this.btnQuickBooks = new System.Windows.Forms.Button();
+            this.lblStatus = new System.Windows.Forms.Label();
+            this.txtStatus = new System.Windows.Forms.TextBox();
             this.SuspendLayout();
             // 
             // label1
@@ -68,7 +70,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.txtExcelFile.Location = new System.Drawing.Point(140, 20);
             this.txtExcelFile.Name = "txtExcelFile";
-            this.txtExcelFile.Size = new System.Drawing.Size(477, 20);
+            this.txtExcelFile.Size = new System.Drawing.Size(454, 20);
             this.txtExcelFile.TabIndex = 2;
             // 
             // txtPDFFile
@@ -77,7 +79,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.txtPDFFile.Location = new System.Drawing.Point(140, 51);
             this.txtPDFFile.Name = "txtPDFFile";
-            this.txtPDFFile.Size = new System.Drawing.Size(477, 20);
+            this.txtPDFFile.Size = new System.Drawing.Size(454, 20);
             this.txtPDFFile.TabIndex = 5;
             // 
             // btnFindPDF
@@ -103,7 +105,7 @@
             // 
             this.btnImport.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnImport.Font = new System.Drawing.Font("Wingdings 3", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(2)));
-            this.btnImport.Location = new System.Drawing.Point(622, 20);
+            this.btnImport.Location = new System.Drawing.Point(599, 20);
             this.btnImport.Name = "btnImport";
             this.btnImport.Size = new System.Drawing.Size(21, 21);
             this.btnImport.TabIndex = 6;
@@ -116,7 +118,7 @@
             // 
             this.btnSplitPDF.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnSplitPDF.Font = new System.Drawing.Font("Wingdings 3", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(2)));
-            this.btnSplitPDF.Location = new System.Drawing.Point(622, 80);
+            this.btnSplitPDF.Location = new System.Drawing.Point(599, 80);
             this.btnSplitPDF.Name = "btnSplitPDF";
             this.btnSplitPDF.Size = new System.Drawing.Size(21, 21);
             this.btnSplitPDF.TabIndex = 7;
@@ -131,7 +133,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.txtPDFFolder.Location = new System.Drawing.Point(140, 81);
             this.txtPDFFolder.Name = "txtPDFFolder";
-            this.txtPDFFolder.Size = new System.Drawing.Size(477, 20);
+            this.txtPDFFolder.Size = new System.Drawing.Size(454, 20);
             this.txtPDFFolder.TabIndex = 10;
             // 
             // btnFindFolder
@@ -156,8 +158,9 @@
             // 
             // label4
             // 
+            this.label4.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(462, 117);
+            this.label4.Location = new System.Drawing.Point(438, 117);
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(157, 13);
             this.label4.TabIndex = 12;
@@ -167,7 +170,7 @@
             // 
             this.btnQuickBooks.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnQuickBooks.Font = new System.Drawing.Font("Wingdings 3", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(2)));
-            this.btnQuickBooks.Location = new System.Drawing.Point(622, 113);
+            this.btnQuickBooks.Location = new System.Drawing.Point(599, 113);
             this.btnQuickBooks.Name = "btnQuickBooks";
             this.btnQuickBooks.Size = new System.Drawing.Size(21, 21);
             this.btnQuickBooks.TabIndex = 11;
@@ -176,11 +179,34 @@
             this.btnQuickBooks.UseVisualStyleBackColor = true;
             this.btnQuickBooks.Click += new System.EventHandler(this.btnQuickBooks_Click);
             // 
+            // lblStatus
+            // 
+            this.lblStatus.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.lblStatus.AutoSize = true;
+            this.lblStatus.Location = new System.Drawing.Point(12, 157);
+            this.lblStatus.Name = "lblStatus";
+            this.lblStatus.Size = new System.Drawing.Size(40, 13);
+            this.lblStatus.TabIndex = 13;
+            this.lblStatus.Text = "Status:";
+            // 
+            // txtStatus
+            // 
+            this.txtStatus.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.txtStatus.Font = new System.Drawing.Font("Arial Rounded MT Bold", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.txtStatus.Location = new System.Drawing.Point(58, 150);
+            this.txtStatus.Multiline = true;
+            this.txtStatus.Name = "txtStatus";
+            this.txtStatus.Size = new System.Drawing.Size(562, 41);
+            this.txtStatus.TabIndex = 14;
+            // 
             // frmImport
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(687, 164);
+            this.ClientSize = new System.Drawing.Size(639, 203);
+            this.Controls.Add(this.txtStatus);
+            this.Controls.Add(this.lblStatus);
             this.Controls.Add(this.label4);
             this.Controls.Add(this.btnQuickBooks);
             this.Controls.Add(this.txtPDFFolder);
@@ -217,6 +243,8 @@
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.Button btnQuickBooks;
+        private System.Windows.Forms.Label lblStatus;
+        private System.Windows.Forms.TextBox txtStatus;
     }
 }
 

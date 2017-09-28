@@ -86,5 +86,23 @@ namespace InvoiceImport.Properties {
                 return ((string)(this["ErrorFolder"]));
             }
         }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Accounts Payable")]
+        public string APAcct {
+            get {
+                return ((string)(this["APAcct"]));
+            }
+        }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("PPI")]
+        public string BillClass {
+            get {
+                return ((string)(this["BillClass"]));
+            }
+        }
     }
 }
