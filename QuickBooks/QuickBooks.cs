@@ -108,6 +108,10 @@ namespace QuickBooks
 
                     foreach(BillData billData in billList)
                     {
+                        // get terms and due date
+                        GetQbVendorInfo(rp, ticket, billData);
+                        GetQbVendorDueDate(rp, ticket, billData);
+
                         // submit bill, get response
                         BuildBillAddRq(reqDoc, inner, billData);
                         OnStatusChanged(new StatusChangedEventArgs($"Submitting invoice {billData.InvoiceNumber} to QuickBooks"));
@@ -157,7 +161,7 @@ namespace QuickBooks
         private XmlElement MakeSimpleElem(XmlDocument doc, string tagName, string tagVal)
         {
             XmlElement elem = doc.CreateElement(tagName);
-            elem.InnerText = tagVal;
+            elem.InnerText = tagVal ?? "";
             return elem;
         }
 
@@ -169,6 +173,8 @@ namespace QuickBooks
         /// <param name="billData"></param>
         void BuildBillAddRq(XmlDocument doc, XmlElement parent, BillData billData)
         {
+            // get vendor
+
             // create BillAddRq aggregate
             XmlElement BillAddRq = doc.CreateElement("BillAddRq");
             parent.AppendChild(BillAddRq);
@@ -204,7 +210,7 @@ namespace QuickBooks
 
                 // set field value for DueDate
                 BillAdd.AppendChild(MakeSimpleElem(doc, "DueDate", billData.DueDate.ToString("yyyy-MM-dd")));
-                
+
                 // set field value for RefNumber
                 BillAdd.AppendChild(MakeSimpleElem(doc, "RefNumber", billData.InvoiceNumber));
 
@@ -254,7 +260,7 @@ namespace QuickBooks
             if(BillAddRsList.Count == 1) //Should always be true since we only did one request in this sample
             {
                 XmlNode responseNode = BillAddRsList.Item(0);
-                
+
                 // get the status code, info, and severity
                 XmlAttributeCollection rsAttributes = responseNode.Attributes;
                 string statusCode = rsAttributes.GetNamedItem("statusCode").Value;
@@ -1098,5 +1104,322 @@ namespace QuickBooks
 
         }
 
+        /// <summary>
+        /// Lookup vendor in Quickbooks, get terms and address info
+        /// </summary>
+        /// <param name="rp">instantiated request processor with open session</param>
+        /// <param name="ticket">existing session ticket</param>
+        /// <param name="billData"><see cref="BillData"/> object containing vendor info</param>
+        /// <returns></returns>
+        void GetQbVendorInfo(RequestProcessor2 rp, string ticket, BillData billData)
+        {
+            XmlDocument doc = null;
+            XmlElement outer = null;
+            XmlElement inner = null;
+            XmlElement VendorQueryRq = null;
+            XmlDocument responseXmlDoc = null;
+            XmlNodeList VendorQueryRsList = null;
+            XmlNode responseNode = null;
+            XmlAttributeCollection rsAttributes = null;
+            XmlNodeList VendorRetList = null;
+            XmlNode VendorRet = null;
+            XmlNode VendorAddressBlock = null;
+            XmlNode TermsRef = null;
+
+            try
+            {
+                // create doc and request envelope tags
+                doc = new XmlDocument();
+                doc.AppendChild(doc.CreateXmlDeclaration("1.0", null, null));
+                doc.AppendChild(doc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
+
+                outer = doc.CreateElement("QBXML");
+                doc.AppendChild(outer);
+
+                inner = doc.CreateElement("QBXMLMsgsRq");
+                outer.AppendChild(inner);
+                inner.SetAttribute("onError", "continueOnError");
+
+                VendorQueryRq = doc.CreateElement("VendorQueryRq");
+                inner.AppendChild(VendorQueryRq);
+
+                //Set field value for FullName
+                VendorQueryRq.AppendChild(MakeSimpleElem(doc, "FullName", billData.VendorFullName));
+
+                //Send the request and get the response from QuickBooks
+                string responseStr = rp.ProcessRequest(ticket, doc.OuterXml);
+
+                //Parse the response XML string into an XmlDocument
+                responseXmlDoc = new XmlDocument();
+                responseXmlDoc.LoadXml(responseStr);
+
+                //Get the response for our request
+                VendorQueryRsList = responseXmlDoc.GetElementsByTagName("VendorQueryRs");
+                responseNode = VendorQueryRsList.Item(0);
+
+                //Check the status code, info, and severity
+                rsAttributes = responseNode.Attributes;
+                string statusCode = rsAttributes.GetNamedItem("statusCode").Value;
+                string statusSeverity = rsAttributes.GetNamedItem("statusSeverity").Value;
+                string statusMessage = rsAttributes.GetNamedItem("statusMessage").Value;
+
+                //status code = 0 all OK, > 0 is error
+                if(Convert.ToInt32(statusCode) == 0)
+                {
+                    VendorRetList = responseNode.SelectNodes("//VendorRet");
+                    if(VendorRetList.Count > 0 && VendorRetList.Item(0) != null)
+                    {
+                        VendorRet = VendorRetList.Item(0);
+                        //Get all field values for VendorAddressBlock aggregate
+                        VendorAddressBlock = VendorRet.SelectSingleNode("./VendorAddressBlock");
+                        if(VendorAddressBlock != null)
+                        {
+                            //Get value of Addr1
+                            if(VendorRet.SelectSingleNode("./VendorAddressBlock/Addr1") != null)
+                            {
+                                billData.BillFrom1 = VendorRet.SelectSingleNode("./VendorAddressBlock/Addr1").InnerText;
+                            }
+                            //Get value of Addr2
+                            if(VendorRet.SelectSingleNode("./VendorAddressBlock/Addr2") != null)
+                            {
+                                billData.BillFrom2 = VendorRet.SelectSingleNode("./VendorAddressBlock/Addr2").InnerText;
+                            }
+                            //Get value of Addr3
+                            if(VendorRet.SelectSingleNode("./VendorAddressBlock/Addr3") != null)
+                            {
+                                billData.BillFrom3 = VendorRet.SelectSingleNode("./VendorAddressBlock/Addr3").InnerText;
+                            }
+                            //Get value of Addr4
+                            if(VendorRet.SelectSingleNode("./VendorAddressBlock/Addr4") != null)
+                            {
+                                billData.BillFrom4 = VendorRet.SelectSingleNode("./VendorAddressBlock/Addr4").InnerText;
+                            }
+                            //Get value of Addr5
+                            if(VendorRet.SelectSingleNode("./VendorAddressBlock/Addr5") != null)
+                            {
+                                billData.BillFrom5 = VendorRet.SelectSingleNode("./VendorAddressBlock/Addr5").InnerText;
+                            }
+                        }
+
+                        //Get all field values for TermsRef aggregate
+                        TermsRef = VendorRet.SelectSingleNode("./TermsRef");
+                        if(TermsRef != null)
+                        {
+                            //Get value of FullName
+                            if(VendorRet.SelectSingleNode("./TermsRef/FullName") != null)
+                            {
+                                billData.Terms = VendorRet.SelectSingleNode("./TermsRef/FullName").InnerText;
+                            }
+                        }
+
+                    }
+                    else
+                    {
+                        var msg = $"Could not find vendor \"{billData.VendorFullName}\" in QuickBooks";
+                        LogIt.LogError(msg);
+                        billData.QBStatus = "Error";
+                        billData.QBMessage = msg;
+                    } // returned at least 1 valid vendor
+                }
+                else
+                {
+                    LogIt.LogError($"Could not do vendor lookup for \"{billData.VendorFullName}\" in QuickBooks");
+                    billData.QBStatus = statusSeverity;
+                    billData.QBMessage = statusMessage;
+                } // valid response status code
+            }
+            catch(Exception ex)
+            {
+                var msg = $"Error looking up vendor \"{billData.VendorFullName}\" in QuickBooks: {ex.Message}";
+                LogIt.LogError(msg);
+                billData.QBStatus = "Error";
+                billData.QBMessage = msg;
+            }
+            finally
+            {
+                TermsRef = null;
+                VendorAddressBlock = null;
+                VendorRet = null;
+                VendorRetList = null;
+                rsAttributes = null;
+                responseNode = null;
+                VendorQueryRsList = null;
+                responseXmlDoc = null;
+                VendorQueryRq = null;
+                inner = null;
+                outer = null;
+                doc = null;
+            }
+        }
+
+        /// <summary>
+        /// Lookup terms in Quickbooks, get due date
+        /// </summary>
+        /// <param name="rp">instantiated request processor with open session</param>
+        /// <param name="ticket">existing session ticket</param>
+        /// <param name="billData"><see cref="BillData"/> object containing vendor info</param>
+        void GetQbVendorDueDate(RequestProcessor2 rp, string ticket, BillData billData)
+        {
+            XmlDocument doc = null;
+            XmlElement outer = null;
+            XmlElement inner = null;
+            XmlElement TermsQueryRq = null;
+            XmlDocument responseXmlDoc = null;
+            XmlNodeList TermsQueryRsList = null;
+            XmlNode responseNode = null;
+            XmlAttributeCollection rsAttributes = null;
+            XmlNodeList ORList = null;
+            XmlNode OR = null;
+            XmlNode StandardTermsRet = null;
+            XmlNode DateDrivenTermsRet = null;
+            int days = 30;
+            try
+            {
+                // create doc and request envelope tags
+                doc = new XmlDocument();
+                doc.AppendChild(doc.CreateXmlDeclaration("1.0", null, null));
+                doc.AppendChild(doc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
+
+                outer = doc.CreateElement("QBXML");
+                doc.AppendChild(outer);
+
+                inner = doc.CreateElement("QBXMLMsgsRq");
+                outer.AppendChild(inner);
+                inner.SetAttribute("onError", "continueOnError");
+
+                TermsQueryRq = doc.CreateElement("TermsQueryRq");
+                inner.AppendChild(TermsQueryRq);
+
+                //Set field value for FullName
+                TermsQueryRq.AppendChild(MakeSimpleElem(doc, "FullName", billData.Terms));
+
+                //Send the request and get the response from QuickBooks
+                string responseStr = rp.ProcessRequest(ticket, doc.OuterXml);
+
+                //Parse the response XML string into an XmlDocument
+                responseXmlDoc = new XmlDocument();
+                responseXmlDoc.LoadXml(responseStr);
+
+                //Get the response for our request
+                TermsQueryRsList = responseXmlDoc.GetElementsByTagName("TermsQueryRs");
+                responseNode = TermsQueryRsList.Item(0);
+
+                //Check the status code, info, and severity
+                rsAttributes = responseNode.Attributes;
+                string statusCode = rsAttributes.GetNamedItem("statusCode").Value;
+                string statusSeverity = rsAttributes.GetNamedItem("statusSeverity").Value;
+                string statusMessage = rsAttributes.GetNamedItem("statusMessage").Value;
+
+
+                //status code = 0 all OK, > 0 is error
+                if(Convert.ToInt32(statusCode) == 0)
+                {
+
+                    //ORList = responseNode.SelectNodes("//OR");
+                    //if(ORList.Count > 0 && ORList.Item(0) != null)
+                    //{
+                    //    OR = ORList.Item(0);
+
+                    //    // decide whether to use standard or date-driven terms info
+                    //    StandardTermsRet = OR.SelectSingleNode("./StandardTermsRet");
+                    //    DateDrivenTermsRet = OR.SelectSingleNode("./DateDrivenTermsRet");
+                    StandardTermsRet = responseNode.SelectSingleNode("./StandardTermsRet");
+                    DateDrivenTermsRet = responseNode.SelectSingleNode("./DateDrivenTermsRet");
+
+                    // standard
+                    if(StandardTermsRet != null &&
+                           StandardTermsRet.SelectSingleNode("./IsActive") != null &&
+                           StandardTermsRet.SelectSingleNode("./IsActive").InnerText.ToLower() == "true")
+                    {
+                        // get value of StdDueDays, if invalid use default due days
+                        string StdDueDays = "";
+                        try
+                        {
+                            StdDueDays = StandardTermsRet.SelectSingleNode("./StdDueDays").InnerText;
+                            days = int.Parse(StdDueDays);
+                        }
+                        catch
+                        {
+                            // do nothing, we already have a default days value
+                            LogIt.LogWarn($"Couldn't parse StdDueDays \"{StdDueDays}\", using default due date");
+                        }
+                        finally
+                        {
+                            billData.DueDate = billData.InvoiceDate.AddDays(days);
+                        }
+
+                    }
+
+                    // date-driven
+                    else if(DateDrivenTermsRet != null &&
+                            DateDrivenTermsRet.SelectSingleNode("./IsActive") != null &&
+                            DateDrivenTermsRet.SelectSingleNode("./IsActive").InnerText.ToLower() == "true")
+                    {
+                        // get day of month due, if invalid use default due days
+                        string DayOfMonthDue = "";
+                        try
+                        {
+                            DayOfMonthDue = DateDrivenTermsRet.SelectSingleNode("./DayOfMonthDue").InnerText;
+                            int dueDay = int.Parse(DayOfMonthDue);
+                            DateTime nextMo = billData.InvoiceDate.AddMonths(1);
+                            billData.DueDate = new DateTime(nextMo.Year, nextMo.Month, dueDay);
+
+                        }
+                        catch
+                        {
+                            // invalid day of month, so use standard net-30 terms
+                            billData.DueDate = billData.InvoiceDate.AddDays(days);
+                            LogIt.LogWarn($"Couldn't parse DayOfMonthDue \"{DayOfMonthDue}\", using default due date");
+                        }
+
+                    }
+
+                    // if all else fails, use standard net-30 terms
+                    else
+                    {
+                        billData.DueDate = billData.InvoiceDate.AddDays(days);
+                    } // valid standard or date-driven terms
+
+                    //}
+                    //else
+                    //{
+                    //    var msg = $"Could not find terms \"{billData.Terms}\" in QuickBooks";
+                    //    LogIt.LogError(msg);
+                    //    billData.QBStatus = "Error";
+                    //    billData.QBMessage = msg;
+                    //} // returned at least 1 valid terms
+
+                }
+                else
+                {
+                    LogIt.LogError($"Could not do terms lookup for \"{billData.Terms}\" in QuickBooks");
+                    billData.QBStatus = statusSeverity;
+                    billData.QBMessage = statusMessage;
+                } // valid response status code
+            }
+
+            catch(Exception ex)
+            {
+                var msg = $"Error looking up terms \"{billData.Terms}\" in QuickBooks: {ex.Message}";
+                LogIt.LogError(msg);
+                billData.QBStatus = "Error";
+                billData.QBMessage = msg;
+            }
+            finally
+            {
+                DateDrivenTermsRet = null;
+                StandardTermsRet = null;
+                OR = null;
+                ORList = null;
+                rsAttributes = null;
+                responseNode = null;
+                TermsQueryRsList = null;
+                responseXmlDoc = null;
+                TermsQueryRq = null;
+                inner = null;
+                outer = null;
+                doc = null;
+            }
+        }
     }
 }

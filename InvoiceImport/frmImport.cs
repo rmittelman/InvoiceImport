@@ -42,15 +42,9 @@ namespace InvoiceImport
             invDesc = 7,
             vendorID = 8,
             fullName = 9,
-            billFrom1 = 10,
-            billFrom2 = 11,
-            billFrom3 = 12,
-            billFrom4 = 13,
-            billFrom5 = 14,
-            terms = 15,
-            expAcct = 16,
-            status = 17,
-            message = 18
+            expAcct = 10,
+            status = 11,
+            message = 12
         }
         #endregion
 
@@ -506,30 +500,30 @@ namespace InvoiceImport
                         if(billData.VendorFullName == "0")
                             billData.VendorFullName = "";
 
-                        xlCell = (Excel.Range)xlRow.Cells[cols.billFrom1];
-                        billData.BillFrom1 = (xlCell.Value2 ?? "").ToString();
-                        if(billData.BillFrom1 == "0")
-                            billData.BillFrom1 = "";
+                        //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom1];
+                        //billData.BillFrom1 = (xlCell.Value2 ?? "").ToString();
+                        //if(billData.BillFrom1 == "0")
+                        //    billData.BillFrom1 = "";
 
-                        xlCell = (Excel.Range)xlRow.Cells[cols.billFrom2];
-                        billData.BillFrom2 = (xlCell.Value2 ?? "").ToString();
-                        if(billData.BillFrom2 == "0")
-                            billData.BillFrom2 = "";
+                        //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom2];
+                        //billData.BillFrom2 = (xlCell.Value2 ?? "").ToString();
+                        //if(billData.BillFrom2 == "0")
+                        //    billData.BillFrom2 = "";
 
-                        xlCell = (Excel.Range)xlRow.Cells[cols.billFrom3];
-                        billData.BillFrom3 = (xlCell.Value2 ?? "").ToString();
-                        if(billData.BillFrom3 == "0")
-                            billData.BillFrom3 = "";
+                        //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom3];
+                        //billData.BillFrom3 = (xlCell.Value2 ?? "").ToString();
+                        //if(billData.BillFrom3 == "0")
+                        //    billData.BillFrom3 = "";
 
-                        xlCell = (Excel.Range)xlRow.Cells[cols.billFrom4];
-                        billData.BillFrom4 = (xlCell.Value2 ?? "").ToString();
-                        if(billData.BillFrom4 == "0")
-                            billData.BillFrom4 = "";
+                        //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom4];
+                        //billData.BillFrom4 = (xlCell.Value2 ?? "").ToString();
+                        //if(billData.BillFrom4 == "0")
+                        //    billData.BillFrom4 = "";
 
-                        xlCell = (Excel.Range)xlRow.Cells[cols.billFrom5];
-                        billData.BillFrom5 = (xlCell.Value2 ?? "").ToString();
-                        if(billData.BillFrom5 == "0")
-                            billData.BillFrom5 = "";
+                        //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom5];
+                        //billData.BillFrom5 = (xlCell.Value2 ?? "").ToString();
+                        //if(billData.BillFrom5 == "0")
+                        //    billData.BillFrom5 = "";
 
                         // get and validate remaining items
                         DateTime invDate = new DateTime();
@@ -602,13 +596,13 @@ namespace InvoiceImport
                                         billData.ExpenseAcct = expAcct;
                                     } // valid expense account
 
-                                    // get terms, calculate due date
-                                    xlCell = (Excel.Range)xlRow.Cells[cols.terms];
-                                    var terms = (xlCell.Value2 ?? "").ToString();
-                                    if(terms == "0")
-                                        terms = "";
-                                    billData.Terms = terms;
-                                    billData.DueDate = get_due_date(vendor, invDate, terms);
+                                    //// get terms, calculate due date
+                                    //xlCell = (Excel.Range)xlRow.Cells[cols.terms];
+                                    //var terms = (xlCell.Value2 ?? "").ToString();
+                                    //if(terms == "0")
+                                    //    terms = "";
+                                    //billData.Terms = terms;
+                                    //billData.DueDate = get_due_date(vendor, invDate, terms);
 
                                     // add the QB invoice
                                     billList.Add(billData);
