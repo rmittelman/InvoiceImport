@@ -11,6 +11,9 @@ using Aimm.Logging;
 
 namespace QuickBooks
 {
+
+
+
     /// <summary>
     /// for reporting status back to caller
     /// </summary>
@@ -53,6 +56,59 @@ namespace QuickBooks
     /// </summary>
     public class QuickBooks
     {
+
+        bool sessionBegun = false;
+        bool connectionOpen = false;
+        RequestProcessor2 rp = null;
+        XmlDocument reqDoc = null;
+        XmlElement outer = null;
+        XmlElement inner = null;
+        string ticket = null;
+
+        ~QuickBooks()
+        {
+            Disconnect();
+            inner = null;
+            outer = null;
+            reqDoc = null;
+            rp = null;
+        }
+
+        public bool Connect()
+        {
+            try
+            {
+                OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));
+                rp = new RequestProcessor2();
+                rp.OpenConnection2("", "AIMM", QBXMLRPConnectionType.localQBD);
+                connectionOpen = true;
+                ticket = rp.BeginSession("", QBFileMode.qbFileOpenDoNotCare);
+                sessionBegun = true;
+                OnStatusChanged(new StatusChangedEventArgs("Connected to QuickBooks"));
+                return true;
+            }
+            catch(Exception ex)
+            {
+                OnStatusChanged(new StatusChangedEventArgs($"Could not connect to QuickBooks: {ex.Message}"));
+                return false;
+            }
+        }
+
+        private void Disconnect()
+        {
+            if(sessionBegun)
+            {
+                rp.EndSession(ticket);
+                sessionBegun = false;
+            }
+
+            if(connectionOpen)
+            {
+                rp.CloseConnection();
+                connectionOpen = false;
+            }
+        }
+
         /// <summary>
         /// for reporting status back to caller
         /// </summary>
@@ -60,6 +116,56 @@ namespace QuickBooks
         protected virtual void OnStatusChanged(StatusChangedEventArgs e)
         {
             StatusChanged?.Invoke(this, e);
+        }
+
+        /// <summary>
+        /// add a vendor bill to QuickBooks
+        /// </summary>
+        /// <param name="billData">A <see cref="BillData"/> object containing info for the vendor bill</param>
+        /// <returns></returns>
+        public bool AddVendorBill(BillData billData)
+        {
+            bool result = false;
+
+            try
+            {
+                OnStatusChanged(new StatusChangedEventArgs("Building XML document"));
+                reqDoc = new XmlDocument();
+                reqDoc.AppendChild(reqDoc.CreateXmlDeclaration("1.0", null, null));
+                reqDoc.AppendChild(reqDoc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
+
+                //Create the outer request envelope tag
+                outer = reqDoc.CreateElement("QBXML");
+                reqDoc.AppendChild(outer);
+
+                //Create the inner request envelope & any needed attributes
+                inner = reqDoc.CreateElement("QBXMLMsgsRq");
+                outer.AppendChild(inner);
+                inner.SetAttribute("onError", "continueOnError");
+
+                // get terms and due date
+                GetQbVendorInfo(rp, ticket, billData);
+                GetQbVendorDueDate(rp, ticket, billData);
+
+                // clear any old bill info, submit bill, get response
+                inner.IsEmpty = true;
+                BuildBillAddRq(reqDoc, inner, billData);
+                OnStatusChanged(new StatusChangedEventArgs($"Submitting invoice {billData.InvoiceNumber} to QuickBooks"));
+                string responseStr = rp.ProcessRequest(ticket, reqDoc.OuterXml);
+                WalkBillAddRs(responseStr, billData);
+                var msg = $"Submitted invoice {billData.InvoiceNumber} to QuickBooks";
+                OnStatusChanged(new StatusChangedEventArgs(msg));
+                LogIt.LogInfo(msg);
+                result = true;
+            }
+            catch(Exception ex)
+            {
+                var msg = $"Error occurred adding vendor bills: {ex.Message}";
+                OnStatusChanged(new StatusChangedEventArgs(msg));
+                LogIt.LogError(msg);
+                result = false;
+            }
+            return result;
         }
 
         /// <summary>
@@ -112,7 +218,8 @@ namespace QuickBooks
                         GetQbVendorInfo(rp, ticket, billData);
                         GetQbVendorDueDate(rp, ticket, billData);
 
-                        // submit bill, get response
+                        // clear any old bill info, submit bill, get response
+                        inner.IsEmpty = true;
                         BuildBillAddRq(reqDoc, inner, billData);
                         OnStatusChanged(new StatusChangedEventArgs($"Submitting invoice {billData.InvoiceNumber} to QuickBooks"));
                         string responseStr = rp.ProcessRequest(ticket, reqDoc.OuterXml);
@@ -1114,8 +1221,8 @@ namespace QuickBooks
         void GetQbVendorInfo(RequestProcessor2 rp, string ticket, BillData billData)
         {
             XmlDocument doc = null;
-            XmlElement outer = null;
-            XmlElement inner = null;
+            XmlElement docOuter = null;
+            XmlElement docInner = null;
             XmlElement VendorQueryRq = null;
             XmlDocument responseXmlDoc = null;
             XmlNodeList VendorQueryRsList = null;
@@ -1133,15 +1240,15 @@ namespace QuickBooks
                 doc.AppendChild(doc.CreateXmlDeclaration("1.0", null, null));
                 doc.AppendChild(doc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
 
-                outer = doc.CreateElement("QBXML");
-                doc.AppendChild(outer);
+                docOuter = doc.CreateElement("QBXML");
+                doc.AppendChild(docOuter);
 
-                inner = doc.CreateElement("QBXMLMsgsRq");
-                outer.AppendChild(inner);
-                inner.SetAttribute("onError", "continueOnError");
+                docInner = doc.CreateElement("QBXMLMsgsRq");
+                docOuter.AppendChild(docInner);
+                docInner.SetAttribute("onError", "continueOnError");
 
                 VendorQueryRq = doc.CreateElement("VendorQueryRq");
-                inner.AppendChild(VendorQueryRq);
+                docInner.AppendChild(VendorQueryRq);
 
                 //Set field value for FullName
                 VendorQueryRq.AppendChild(MakeSimpleElem(doc, "FullName", billData.VendorFullName));
@@ -1246,8 +1353,8 @@ namespace QuickBooks
                 VendorQueryRsList = null;
                 responseXmlDoc = null;
                 VendorQueryRq = null;
-                inner = null;
-                outer = null;
+                docInner = null;
+                docOuter = null;
                 doc = null;
             }
         }
@@ -1261,8 +1368,8 @@ namespace QuickBooks
         void GetQbVendorDueDate(RequestProcessor2 rp, string ticket, BillData billData)
         {
             XmlDocument doc = null;
-            XmlElement outer = null;
-            XmlElement inner = null;
+            XmlElement docOuter = null;
+            XmlElement docInner = null;
             XmlElement TermsQueryRq = null;
             XmlDocument responseXmlDoc = null;
             XmlNodeList TermsQueryRsList = null;
@@ -1280,15 +1387,15 @@ namespace QuickBooks
                 doc.AppendChild(doc.CreateXmlDeclaration("1.0", null, null));
                 doc.AppendChild(doc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
 
-                outer = doc.CreateElement("QBXML");
-                doc.AppendChild(outer);
+                docOuter = doc.CreateElement("QBXML");
+                doc.AppendChild(docOuter);
 
-                inner = doc.CreateElement("QBXMLMsgsRq");
-                outer.AppendChild(inner);
-                inner.SetAttribute("onError", "continueOnError");
+                docInner = doc.CreateElement("QBXMLMsgsRq");
+                docOuter.AppendChild(docInner);
+                docInner.SetAttribute("onError", "continueOnError");
 
                 TermsQueryRq = doc.CreateElement("TermsQueryRq");
-                inner.AppendChild(TermsQueryRq);
+                docInner.AppendChild(TermsQueryRq);
 
                 //Set field value for FullName
                 TermsQueryRq.AppendChild(MakeSimpleElem(doc, "FullName", billData.Terms));
@@ -1416,8 +1523,8 @@ namespace QuickBooks
                 TermsQueryRsList = null;
                 responseXmlDoc = null;
                 TermsQueryRq = null;
-                inner = null;
-                outer = null;
+                docInner = null;
+                docOuter = null;
                 doc = null;
             }
         }

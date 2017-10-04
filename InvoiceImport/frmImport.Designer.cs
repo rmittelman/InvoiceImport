@@ -165,6 +165,7 @@
             this.label4.Size = new System.Drawing.Size(157, 13);
             this.label4.TabIndex = 12;
             this.label4.Text = "Add Vendor Bills to QuickBooks";
+            this.label4.Visible = false;
             // 
             // btnQuickBooks
             // 
@@ -177,13 +178,14 @@
             this.btnQuickBooks.Text = "}";
             this.btnQuickBooks.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageAboveText;
             this.btnQuickBooks.UseVisualStyleBackColor = true;
+            this.btnQuickBooks.Visible = false;
             this.btnQuickBooks.Click += new System.EventHandler(this.btnQuickBooks_Click);
             // 
             // lblStatus
             // 
             this.lblStatus.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.lblStatus.AutoSize = true;
-            this.lblStatus.Location = new System.Drawing.Point(12, 157);
+            this.lblStatus.Location = new System.Drawing.Point(12, 158);
             this.lblStatus.Name = "lblStatus";
             this.lblStatus.Size = new System.Drawing.Size(40, 13);
             this.lblStatus.TabIndex = 13;
@@ -194,17 +196,18 @@
             this.txtStatus.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.txtStatus.Font = new System.Drawing.Font("Arial Rounded MT Bold", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.txtStatus.Location = new System.Drawing.Point(58, 150);
+            this.txtStatus.Location = new System.Drawing.Point(58, 152);
             this.txtStatus.Multiline = true;
             this.txtStatus.Name = "txtStatus";
-            this.txtStatus.Size = new System.Drawing.Size(562, 41);
+            this.txtStatus.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            this.txtStatus.Size = new System.Drawing.Size(562, 66);
             this.txtStatus.TabIndex = 14;
             // 
             // frmImport
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(639, 203);
+            this.ClientSize = new System.Drawing.Size(639, 230);
             this.Controls.Add(this.txtStatus);
             this.Controls.Add(this.lblStatus);
             this.Controls.Add(this.label4);
