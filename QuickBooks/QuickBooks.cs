@@ -98,15 +98,35 @@ namespace QuickBooks
         {
             if(sessionBegun)
             {
-                rp.EndSession(ticket);
-                sessionBegun = false;
+                try
+                {
+                    rp.EndSession(ticket);
+                }
+                catch(Exception)
+                {
+                }
+                finally
+                {
+                    sessionBegun = false;
+                }
+
             }
 
             if(connectionOpen)
             {
-                rp.CloseConnection();
-                connectionOpen = false;
+                try
+                {
+                    rp.CloseConnection();
+                }
+                catch(Exception)
+                {
+                }
+                finally
+                {
+                    connectionOpen = false;
+                }
             }
+            rp = null;
         }
 
         /// <summary>
@@ -119,17 +139,13 @@ namespace QuickBooks
         }
 
         /// <summary>
-        /// add a vendor bill to QuickBooks
+        /// setup new request document
         /// </summary>
-        /// <param name="billData">A <see cref="BillData"/> object containing info for the vendor bill</param>
-        /// <returns></returns>
-        public bool AddVendorBill(BillData billData)
+        private bool BuildXmlDoc()
         {
             bool result = false;
-
             try
             {
-                OnStatusChanged(new StatusChangedEventArgs("Building XML document"));
                 reqDoc = new XmlDocument();
                 reqDoc.AppendChild(reqDoc.CreateXmlDeclaration("1.0", null, null));
                 reqDoc.AppendChild(reqDoc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
@@ -143,24 +159,46 @@ namespace QuickBooks
                 outer.AppendChild(inner);
                 inner.SetAttribute("onError", "continueOnError");
 
-                // get terms and due date
-                GetQbVendorInfo(rp, ticket, billData);
-                GetQbVendorDueDate(rp, ticket, billData);
-
-                // clear any old bill info, submit bill, get response
-                inner.IsEmpty = true;
-                BuildBillAddRq(reqDoc, inner, billData);
-                OnStatusChanged(new StatusChangedEventArgs($"Submitting invoice {billData.InvoiceNumber} to QuickBooks"));
-                string responseStr = rp.ProcessRequest(ticket, reqDoc.OuterXml);
-                WalkBillAddRs(responseStr, billData);
-                var msg = $"Submitted invoice {billData.InvoiceNumber} to QuickBooks";
-                OnStatusChanged(new StatusChangedEventArgs(msg));
-                LogIt.LogInfo(msg);
                 result = true;
             }
             catch(Exception ex)
             {
-                var msg = $"Error occurred adding vendor bills: {ex.Message}";
+                var msg = $"Error occurred in \"BuildXmlDoc\" adding vendor bill: {ex.Message}";
+                OnStatusChanged(new StatusChangedEventArgs(msg));
+                LogIt.LogError(msg);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// setup envelope for request data
+        /// </summary>
+        /// <param name="billData">A <see cref="BillData"/> object containing info for the vendor bill</param>
+        private bool PrepareXmlRequest(BillData billData)
+        {
+            bool result = false;
+
+            try
+            {
+                // get terms and due date
+                GetQbVendorInfo(rp, ticket, billData);
+                GetQbVendorDueDate(rp, ticket, billData);
+
+                // create BillAddRq aggregate
+                XmlElement billAddRq = reqDoc.CreateElement("BillAddRq");
+                inner.AppendChild(billAddRq);
+
+                // create BillAdd aggregate and fill in field values for it
+                XmlElement billAdd = reqDoc.CreateElement("BillAdd");
+                billAddRq.AppendChild(billAdd);
+
+                // add bill header info
+                result = AddBillHeader(billData);
+
+            }
+            catch(Exception ex)
+            {
+                var msg = $"Error occurred in \"PrepareXmlRequest\" adding vendor bill: {ex.Message}";
                 OnStatusChanged(new StatusChangedEventArgs(msg));
                 LogIt.LogError(msg);
                 result = false;
@@ -169,94 +207,328 @@ namespace QuickBooks
         }
 
         /// <summary>
+        /// add bill header information to xml request
+        /// </summary>
+        /// <param name="billData">A <see cref="BillData"/> object containing info for the vendor bill</param>
+        private bool AddBillHeader(BillData billData)
+        {
+            bool result = false;
+            try
+            {
+                var billAdd = reqDoc.SelectSingleNode("//BillAdd") as XmlElement;
+                if(billAdd != null)
+                {
+                    // create VendorRef aggregate and fill in field values for it
+                    XmlElement VendorRef = reqDoc.CreateElement("VendorRef");
+                    billAdd.AppendChild(VendorRef);
+                    VendorRef.AppendChild(MakeSimpleElem(reqDoc, "FullName", billData.VendorFullName));
+
+                    // create VendorAddress aggregate and fill in field values for it
+                    XmlElement VendorAddress = reqDoc.CreateElement("VendorAddress");
+                    billAdd.AppendChild(VendorAddress);
+                    VendorAddress.AppendChild(MakeSimpleElem(reqDoc, "Addr1", billData.BillFrom1));
+                    VendorAddress.AppendChild(MakeSimpleElem(reqDoc, "Addr2", billData.BillFrom2));
+                    VendorAddress.AppendChild(MakeSimpleElem(reqDoc, "Addr3", billData.BillFrom3));
+                    VendorAddress.AppendChild(MakeSimpleElem(reqDoc, "Addr4", billData.BillFrom4));
+                    VendorAddress.AppendChild(MakeSimpleElem(reqDoc, "Addr5", billData.BillFrom5));
+
+                    // create APAccountRef aggregate and fill in field values for it
+                    XmlElement APAccountRef = reqDoc.CreateElement("APAccountRef");
+                    billAdd.AppendChild(APAccountRef);
+                    APAccountRef.AppendChild(MakeSimpleElem(reqDoc, "FullName", billData.APAccount));
+
+                    // set field value for TxnDate
+                    billAdd.AppendChild(MakeSimpleElem(reqDoc, "TxnDate", billData.InvoiceDate.ToString("yyyy-MM-dd")));
+
+                    // set field value for DueDate
+                    billAdd.AppendChild(MakeSimpleElem(reqDoc, "DueDate", billData.DueDate.ToString("yyyy-MM-dd")));
+
+                    // set field value for RefNumber
+                    billAdd.AppendChild(MakeSimpleElem(reqDoc, "RefNumber", billData.InvoiceNumber));
+
+                    //Create TermsRef aggregate and fill in field values for it
+                    XmlElement TermsRef = reqDoc.CreateElement("TermsRef");
+                    billAdd.AppendChild(TermsRef);
+                    TermsRef.AppendChild(MakeSimpleElem(reqDoc, "FullName", billData.Terms));
+
+                    result = true;
+                }
+                else
+                {
+                    var msg = $"Could not add bill header to xml request";
+                    OnStatusChanged(new StatusChangedEventArgs(msg));
+                    LogIt.LogError(msg);
+                }
+
+            }
+            catch(Exception ex)
+            {
+                var msg = $"Error occurred in \"AddBillHeader\" adding vendor bill: {ex.Message}";
+                OnStatusChanged(new StatusChangedEventArgs(msg));
+                LogIt.LogError(msg);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// add a bill expense line to xml request
+        /// </summary>
+        /// <param name="billData">A <see cref="BillData"/> object containing info for the vendor bill</param>
+        private bool AddBillExpenseLine(BillData billData)
+        {
+            bool result = false;
+            try
+            {
+                var billAdd = reqDoc.SelectSingleNode("//BillAdd") as XmlElement;
+                if(billAdd != null)
+                {
+                    // create ExpenseLineAdd aggregate and fill in field values for it
+                    XmlElement expenseLineAdd = reqDoc.CreateElement("ExpenseLineAdd");
+                    billAdd.AppendChild(expenseLineAdd);
+
+                    XmlElement AccountRef = reqDoc.CreateElement("AccountRef");
+                    expenseLineAdd.AppendChild(AccountRef);
+                    AccountRef.AppendChild(MakeSimpleElem(reqDoc, "FullName", billData.ExpenseAcct));
+
+                    expenseLineAdd.AppendChild(MakeSimpleElem(reqDoc, "Amount", billData.InvoiceAmount.ToString()));
+
+                    XmlElement CustomerRef = reqDoc.CreateElement("CustomerRef");
+                    expenseLineAdd.AppendChild(CustomerRef);
+                    CustomerRef.AppendChild(MakeSimpleElem(reqDoc, "FullName", billData.Customer));
+
+                    XmlElement ClassRef = reqDoc.CreateElement("ClassRef");
+                    expenseLineAdd.AppendChild(ClassRef);
+                    ClassRef.AppendChild(MakeSimpleElem(reqDoc, "FullName", billData.ClassRef));
+
+                    result = true;
+                }
+                else
+                {
+                    var msg = $"Could not add bill expense line to xml request";
+                    OnStatusChanged(new StatusChangedEventArgs(msg));
+                    LogIt.LogError(msg);
+                }
+            }
+            catch(Exception ex)
+            {
+                var msg = $"Error occurred in \"AddBillExpenseLine\" adding vendor bill: {ex.Message}";
+                OnStatusChanged(new StatusChangedEventArgs(msg));
+                LogIt.LogError(msg);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// add a single STANDARD vendor bill to quickbooks
+        /// </summary>
+        /// <param name="billData">A <see cref="BillData"/> object containing info for the vendor bill</param>
+        /// <returns></returns>
+        public bool AddStandardVendorBill(BillData billData)
+        {
+            bool result = false;
+
+            // build or clear xml doc
+            if(reqDoc == null)
+                result = BuildXmlDoc();
+            else
+            {
+                inner.IsEmpty = true;
+                result = true;
+            }
+
+            if(result)
+                result = PrepareXmlRequest(billData);
+            if(result)
+                result = AddBillExpenseLine(billData);
+
+            if(result)
+                result = AddVendorBill(billData);
+
+            return result;
+        }
+
+        /// <summary>
+        /// add multiple STOCK vendor bills to a single quickbooks vendor bill
+        /// </summary>
+        /// <param name="billList">A list of <see cref="BillData"/> objects containing info for the vendor bills</param>
+        /// <returns></returns>
+        /// <remarks>assumes all bills from same vendor</remarks>
+        public bool AddStockVendorBills(List<BillData> billList)
+        {
+            bool result = false;
+
+            if(billList.Count > 0)
+            {
+                // build or clear xml doc
+                if(reqDoc == null)
+                    result = BuildXmlDoc();
+                else
+                {
+                    inner.IsEmpty = true;
+                    result = true;
+                }
+
+                if(result)
+                    result = PrepareXmlRequest(billList[0]);
+                if(result)
+                    result = AddBillHeader(billList[0]);
+                if(result)
+                {
+                    foreach(var billData in billList)
+                    {
+                        result = AddBillExpenseLine(billList[0]);
+                        if(!result)
+                        {
+                            var msg = $"Could not add bill expense line to xml request";
+                            OnStatusChanged(new StatusChangedEventArgs(msg));
+                            LogIt.LogError(msg);
+                            break;
+                        }
+                    }
+                }
+                if(result)
+                    result = AddVendorBill(billList[0]);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// add a vendor bill to QuickBooks
+        /// </summary>
+        /// <param name="billData">A <see cref="BillData"/> object containing info for the vendor bill</param>
+        /// <returns></returns>
+        public bool AddVendorBill(BillData billData)
+        {
+            bool result = false;
+
+            try
+            {
+                // build, submit bill, get response
+                //OnStatusChanged(new StatusChangedEventArgs("Building bill request"));
+                //BuildBillAddRq(reqDoc, inner, billData);
+                OnStatusChanged(new StatusChangedEventArgs($"Submitting invoice {billData.InvoiceNumber} to QuickBooks"));
+                string responseStr = rp.ProcessRequest(ticket, reqDoc.OuterXml);
+                WalkBillAddRs(responseStr, billData);
+                if(billData.QBStatus == "Error")
+                {
+                    var msg = $"Error submitting invoice {billData.InvoiceNumber} to QuickBooks: {billData.QBMessage}";
+                    OnStatusChanged(new StatusChangedEventArgs(msg));
+                    LogIt.LogError(msg);
+                    result = false;
+
+                }
+                else
+                {
+                    var msg = $"Submitted invoice {billData.InvoiceNumber} to QuickBooks";
+                    OnStatusChanged(new StatusChangedEventArgs(msg));
+                    LogIt.LogInfo(msg);
+                    result = true;
+                }
+            }
+            catch(Exception ex)
+            {
+                var msg = $"Error occurred adding vendor bill: {ex.Message}";
+                OnStatusChanged(new StatusChangedEventArgs(msg));
+                LogIt.LogError(msg);
+                result = false;
+            }
+            return result;
+        }
+
+
+        /// <summary>
         /// adds a list of vendor bills to QuickBooks
         /// </summary>
         /// <param name="billList"></param>
         /// <returns></returns>
-        public bool AddVendorBills(List<BillData> billList)
-        {
-            bool result = false;
+        //public bool AddVendorBills(List<BillData> billList)
+        //{
+        //    bool result = false;
 
-            // proceed if any vendor bills
-            if(billList.Count > 0)
-            {
-                bool sessionBegun = false;
-                bool connectionOpen = false;
-                RequestProcessor2 rp = null;
-                XmlDocument reqDoc = null;
-                XmlElement outer = null;
-                XmlElement inner = null;
-                string ticket = null;
+        //    // proceed if any vendor bills
+        //    if(billList.Count > 0)
+        //    {
+        //        bool sessionBegun = false;
+        //        bool connectionOpen = false;
+        //        RequestProcessor2 rp = null;
+        //        XmlDocument reqDoc = null;
+        //        XmlElement outer = null;
+        //        XmlElement inner = null;
+        //        string ticket = null;
 
-                try
-                {
-                    OnStatusChanged(new StatusChangedEventArgs("Building XML document"));
-                    reqDoc = new XmlDocument();
-                    reqDoc.AppendChild(reqDoc.CreateXmlDeclaration("1.0", null, null));
-                    reqDoc.AppendChild(reqDoc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
+        //        try
+        //        {
+        //            OnStatusChanged(new StatusChangedEventArgs("Building XML document"));
+        //            reqDoc = new XmlDocument();
+        //            reqDoc.AppendChild(reqDoc.CreateXmlDeclaration("1.0", null, null));
+        //            reqDoc.AppendChild(reqDoc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
 
-                    //Create the outer request envelope tag
-                    outer = reqDoc.CreateElement("QBXML");
-                    reqDoc.AppendChild(outer);
+        //            //Create the outer request envelope tag
+        //            outer = reqDoc.CreateElement("QBXML");
+        //            reqDoc.AppendChild(outer);
 
-                    //Create the inner request envelope & any needed attributes
-                    inner = reqDoc.CreateElement("QBXMLMsgsRq");
-                    outer.AppendChild(inner);
-                    inner.SetAttribute("onError", "continueOnError");
+        //            //Create the inner request envelope & any needed attributes
+        //            inner = reqDoc.CreateElement("QBXMLMsgsRq");
+        //            outer.AppendChild(inner);
+        //            inner.SetAttribute("onError", "continueOnError");
 
-                    //Connect to QuickBooks and begin a session
-                    OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));
-                    rp = new RequestProcessor2();
-                    rp.OpenConnection2("", "AIMM", QBXMLRPConnectionType.localQBD);
-                    connectionOpen = true;
-                    ticket = rp.BeginSession("", QBFileMode.qbFileOpenDoNotCare);
-                    sessionBegun = true;
+        //            //Connect to QuickBooks and begin a session
+        //            OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));
+        //            rp = new RequestProcessor2();
+        //            rp.OpenConnection2("", "AIMM", QBXMLRPConnectionType.localQBD);
+        //            connectionOpen = true;
+        //            ticket = rp.BeginSession("", QBFileMode.qbFileOpenDoNotCare);
+        //            sessionBegun = true;
 
-                    foreach(BillData billData in billList)
-                    {
-                        // get terms and due date
-                        GetQbVendorInfo(rp, ticket, billData);
-                        GetQbVendorDueDate(rp, ticket, billData);
+        //            foreach(BillData billData in billList)
+        //            {
+        //                // get terms and due date
+        //                GetQbVendorInfo(rp, ticket, billData);
+        //                GetQbVendorDueDate(rp, ticket, billData);
 
-                        // clear any old bill info, submit bill, get response
-                        inner.IsEmpty = true;
-                        BuildBillAddRq(reqDoc, inner, billData);
-                        OnStatusChanged(new StatusChangedEventArgs($"Submitting invoice {billData.InvoiceNumber} to QuickBooks"));
-                        string responseStr = rp.ProcessRequest(ticket, reqDoc.OuterXml);
-                        WalkBillAddRs(responseStr, billData);
+        //                // clear any old bill info, submit bill, get response
+        //                inner.IsEmpty = true;
+        //                BuildBillAddRq(reqDoc, inner, billData);
+        //                OnStatusChanged(new StatusChangedEventArgs($"Submitting invoice {billData.InvoiceNumber} to QuickBooks"));
+        //                string responseStr = rp.ProcessRequest(ticket, reqDoc.OuterXml);
+        //                WalkBillAddRs(responseStr, billData);
 
-                    }
-                    result = true;
-                }
-                catch(Exception ex)
-                {
-                    var msg = $"Error occurred adding vendor bills: {ex.Message}";
-                    OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));
-                    LogIt.LogError(msg);
-                    result = false;
-                }
-                finally
-                {
-                    if(sessionBegun)
-                    {
-                        rp.EndSession(ticket);
-                        sessionBegun = false;
-                    }
+        //            }
+        //            result = true;
+        //        }
+        //        catch(Exception ex)
+        //        {
+        //            var msg = $"Error occurred adding vendor bills: {ex.Message}";
+        //            OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));
+        //            LogIt.LogError(msg);
+        //            result = false;
+        //        }
+        //        finally
+        //        {
+        //            if(sessionBegun)
+        //            {
+        //                rp.EndSession(ticket);
+        //                sessionBegun = false;
+        //            }
 
-                    if(connectionOpen)
-                    {
-                        rp.CloseConnection();
-                        connectionOpen = false;
-                    }
+        //            if(connectionOpen)
+        //            {
+        //                rp.CloseConnection();
+        //                connectionOpen = false;
+        //            }
 
-                    inner = null;
-                    outer = null;
-                    reqDoc = null;
-                    rp = null;
-                }
-            }
-            return result;
-        }
+        //            inner = null;
+        //            outer = null;
+        //            reqDoc = null;
+        //            rp = null;
+        //        }
+        //    }
+        //    return result;
+        //}
+
+
+
+
 
         /// <summary>
         /// creates an XmlElement to add to document
@@ -275,81 +547,81 @@ namespace QuickBooks
         /// <summary>
         /// creates a quickbooks bill add request for a single vendor invoice
         /// </summary>
-        /// <param name="doc"></param>
-        /// <param name="parent"></param>
-        /// <param name="billData"></param>
-        void BuildBillAddRq(XmlDocument doc, XmlElement parent, BillData billData)
-        {
-            // get vendor
+        /// <param name="doc">xml document containing bill add requests</param>
+        /// <param name="parent">inner xml element to add requests to</param>
+        /// <param name="billData">object holding bill information</param>
+        //void BuildBillAddRq(XmlDocument doc, XmlElement parent, BillData billData)
+        //{
+        //    //// create BillAddRq aggregate
+        //    //XmlElement BillAddRq = doc.CreateElement("BillAddRq");
+        //    //parent.AppendChild(BillAddRq);
 
-            // create BillAddRq aggregate
-            XmlElement BillAddRq = doc.CreateElement("BillAddRq");
-            parent.AppendChild(BillAddRq);
+        //    //// create BillAdd aggregate and fill in field values for it
+        //    //XmlElement BillAdd = doc.CreateElement("BillAdd");
+        //    //BillAddRq.AppendChild(BillAdd);
 
-            // create BillAdd aggregate and fill in field values for it
-            XmlElement BillAdd = doc.CreateElement("BillAdd");
-            BillAddRq.AppendChild(BillAdd);
+        //    try
+        //    {
+        //        // create VendorRef aggregate and fill in field values for it
+        //        XmlElement VendorRef = doc.CreateElement("VendorRef");
+        //        BillAdd.AppendChild(VendorRef);
+        //        VendorRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.VendorFullName));
+
+        //        // create VendorAddress aggregate and fill in field values for it
+        //        XmlElement VendorAddress = doc.CreateElement("VendorAddress");
+        //        BillAdd.AppendChild(VendorAddress);
+        //        VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr1", billData.BillFrom1));
+        //        VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr2", billData.BillFrom2));
+        //        VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr3", billData.BillFrom3));
+        //        VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr4", billData.BillFrom4));
+        //        VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr5", billData.BillFrom5));
+
+        //        // create APAccountRef aggregate and fill in field values for it
+        //        XmlElement APAccountRef = doc.CreateElement("APAccountRef");
+        //        BillAdd.AppendChild(APAccountRef);
+        //        APAccountRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.APAccount));
+
+        //        // set field value for TxnDate
+        //        BillAdd.AppendChild(MakeSimpleElem(doc, "TxnDate", billData.InvoiceDate.ToString("yyyy-MM-dd")));
+
+        //        // set field value for DueDate
+        //        BillAdd.AppendChild(MakeSimpleElem(doc, "DueDate", billData.DueDate.ToString("yyyy-MM-dd")));
+
+        //        // set field value for RefNumber
+        //        BillAdd.AppendChild(MakeSimpleElem(doc, "RefNumber", billData.InvoiceNumber));
+
+        //        //Create TermsRef aggregate and fill in field values for it
+        //        XmlElement TermsRef = doc.CreateElement("TermsRef");
+        //        BillAdd.AppendChild(TermsRef);
+        //        TermsRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.Terms));
 
 
-            try
-            {
-                // create VendorRef aggregate and fill in field values for it
-                XmlElement VendorRef = doc.CreateElement("VendorRef");
-                BillAdd.AppendChild(VendorRef);
-                VendorRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.VendorFullName));
 
-                // create VendorAddress aggregate and fill in field values for it
-                XmlElement VendorAddress = doc.CreateElement("VendorAddress");
-                BillAdd.AppendChild(VendorAddress);
-                VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr1", billData.BillFrom1));
-                VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr2", billData.BillFrom2));
-                VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr3", billData.BillFrom3));
-                VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr4", billData.BillFrom4));
-                VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr5", billData.BillFrom5));
 
-                // create APAccountRef aggregate and fill in field values for it
-                XmlElement APAccountRef = doc.CreateElement("APAccountRef");
-                BillAdd.AppendChild(APAccountRef);
-                APAccountRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.APAccount));
+        //        // create ExpenseLineAdd aggregate and fill in field values for it
+        //        XmlElement ExpenseLineAdd = doc.CreateElement("ExpenseLineAdd");
+        //        BillAdd.AppendChild(ExpenseLineAdd);
 
-                // set field value for TxnDate
-                BillAdd.AppendChild(MakeSimpleElem(doc, "TxnDate", billData.InvoiceDate.ToString("yyyy-MM-dd")));
+        //        XmlElement AccountRef = doc.CreateElement("AccountRef");
+        //        ExpenseLineAdd.AppendChild(AccountRef);
+        //        AccountRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.ExpenseAcct));
 
-                // set field value for DueDate
-                BillAdd.AppendChild(MakeSimpleElem(doc, "DueDate", billData.DueDate.ToString("yyyy-MM-dd")));
+        //        ExpenseLineAdd.AppendChild(MakeSimpleElem(doc, "Amount", billData.InvoiceAmount.ToString()));
 
-                // set field value for RefNumber
-                BillAdd.AppendChild(MakeSimpleElem(doc, "RefNumber", billData.InvoiceNumber));
+        //        XmlElement CustomerRef = doc.CreateElement("CustomerRef");
+        //        ExpenseLineAdd.AppendChild(CustomerRef);
+        //        CustomerRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.Customer));
 
-                //Create TermsRef aggregate and fill in field values for it
-                XmlElement TermsRef = doc.CreateElement("TermsRef");
-                BillAdd.AppendChild(TermsRef);
-                TermsRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.Terms));
+        //        XmlElement ClassRef = doc.CreateElement("ClassRef");
+        //        ExpenseLineAdd.AppendChild(ClassRef);
+        //        ClassRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.ClassRef));
 
-                // create ExpenseLineAdd aggregate and fill in field values for it
-                XmlElement ExpenseLineAdd = doc.CreateElement("ExpenseLineAdd");
-                BillAdd.AppendChild(ExpenseLineAdd);
-
-                XmlElement AccountRef = doc.CreateElement("AccountRef");
-                ExpenseLineAdd.AppendChild(AccountRef);
-                AccountRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.ExpenseAcct));
-
-                ExpenseLineAdd.AppendChild(MakeSimpleElem(doc, "Amount", billData.InvoiceAmount.ToString()));
-
-                XmlElement CustomerRef = doc.CreateElement("CustomerRef");
-                ExpenseLineAdd.AppendChild(CustomerRef);
-                CustomerRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.Customer));
-
-                XmlElement ClassRef = doc.CreateElement("ClassRef");
-                ExpenseLineAdd.AppendChild(ClassRef);
-                ClassRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.ClassRef));
-
-            }
-            catch(Exception ex)
-            {
-                MessageBox.Show(ex.Message);
-            }
-        }
+        //    }
+        //    catch(Exception ex)
+        //    {
+        //        MessageBox.Show(ex.Message);
+        //    }
+        //}
 
         /// <summary>
         /// evaluates response from quickbooks and returns status and error message
