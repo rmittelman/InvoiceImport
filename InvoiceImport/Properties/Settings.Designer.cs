@@ -35,7 +35,7 @@ namespace InvoiceImport.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("Z:\\AIMM Vendor Invoice Import")]
+        [global::System.Configuration.DefaultSettingValueAttribute("Z:\\AIMM Automation\\Vendor Invoice Import")]
         public string SourceFolder {
             get {
                 return ((string)(this["SourceFolder"]));
@@ -53,7 +53,7 @@ namespace InvoiceImport.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("Z:\\AIMM Vendor Invoice Import\\Logs")]
+        [global::System.Configuration.DefaultSettingValueAttribute("Z:\\AIMM Automation\\Vendor Invoice Import\\Logs")]
         public string LogFolder {
             get {
                 return ((string)(this["LogFolder"]));
@@ -62,7 +62,7 @@ namespace InvoiceImport.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("Z:\\AIMM Vendor Invoice Import\\Archive")]
+        [global::System.Configuration.DefaultSettingValueAttribute("Z:\\AIMM Automation\\Vendor Invoice Import\\Archive")]
         public string ArchiveFolder {
             get {
                 return ((string)(this["ArchiveFolder"]));
@@ -71,7 +71,7 @@ namespace InvoiceImport.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("Z:\\AIMM Vendor Invoice Import\\PDFs")]
+        [global::System.Configuration.DefaultSettingValueAttribute("Z:\\AIMM Automation\\Vendor Invoice Import\\PDFs")]
         public string PdfFolder {
             get {
                 return ((string)(this["PdfFolder"]));
@@ -80,7 +80,7 @@ namespace InvoiceImport.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("Z:\\AIMM Vendor Invoice Import\\Errors")]
+        [global::System.Configuration.DefaultSettingValueAttribute("Z:\\AIMM Automation\\Vendor Invoice Import\\Errors")]
         public string ErrorFolder {
             get {
                 return ((string)(this["ErrorFolder"]));

@@ -11,9 +11,6 @@ using Aimm.Logging;
 
 namespace QuickBooks
 {
-
-
-
     /// <summary>
     /// for reporting status back to caller
     /// </summary>
@@ -74,15 +71,29 @@ namespace QuickBooks
             rp = null;
         }
 
+        /// <summary>
+        /// Opens QuickBooks connection and starts session
+        /// </summary>
+        /// <returns>boolean indicating success</returns>
+        /// <remarks>
+        /// appID not required, send ""
+        /// qbFileName: full path name of QuickBooks file, or "" to use currently open file
+        /// </remarks>
         public bool Connect()
         {
             try
             {
+                string appID = "";
+                string appName = "AIMM";
+                QBXMLRPConnectionType connType = QBXMLRPConnectionType.localQBD;
+                string qbFileName = "";
+                QBFileMode fileMode = QBFileMode.qbFileOpenDoNotCare;
+
                 OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));
                 rp = new RequestProcessor2();
-                rp.OpenConnection2("", "AIMM", QBXMLRPConnectionType.localQBD);
+                rp.OpenConnection2(appID,appName, connType);
                 connectionOpen = true;
-                ticket = rp.BeginSession("", QBFileMode.qbFileOpenDoNotCare);
+                ticket = rp.BeginSession(qbFileName, fileMode);
                 sessionBegun = true;
                 OnStatusChanged(new StatusChangedEventArgs("Connected to QuickBooks"));
                 return true;
@@ -136,6 +147,16 @@ namespace QuickBooks
         protected virtual void OnStatusChanged(StatusChangedEventArgs e)
         {
             StatusChanged?.Invoke(this, e);
+        }
+
+        /// <summary>
+        /// Validate customer is in QuickBooks
+        /// </summary>
+        /// <param name="billData"><see cref="BillData"/> object containing customer name</param>
+        /// <returns>boolean indicating whether customer is in quickbooks</returns>
+        public bool IsQbCustomer(BillData billData)
+        {
+            return valid_qb_customer(rp, ticket, billData);
         }
 
         /// <summary>
@@ -290,7 +311,8 @@ namespace QuickBooks
                     expenseLineAdd.AppendChild(AccountRef);
                     AccountRef.AppendChild(MakeSimpleElem(reqDoc, "FullName", billData.ExpenseAcct));
 
-                    expenseLineAdd.AppendChild(MakeSimpleElem(reqDoc, "Amount", billData.InvoiceAmount.ToString()));
+                    expenseLineAdd.AppendChild(MakeSimpleElem(reqDoc, "Amount", billData.InvoiceAmount.ToString("#.00")));
+                    expenseLineAdd.AppendChild(MakeSimpleElem(reqDoc, "Memo", billData.InvoiceNumber));
 
                     XmlElement CustomerRef = reqDoc.CreateElement("CustomerRef");
                     expenseLineAdd.AppendChild(CustomerRef);
@@ -371,12 +393,10 @@ namespace QuickBooks
                 if(result)
                     result = PrepareXmlRequest(billList[0]);
                 if(result)
-                    result = AddBillHeader(billList[0]);
-                if(result)
                 {
                     foreach(var billData in billList)
                     {
-                        result = AddBillExpenseLine(billList[0]);
+                        result = AddBillExpenseLine(billData);
                         if(!result)
                         {
                             var msg = $"Could not add bill expense line to xml request";
@@ -388,6 +408,16 @@ namespace QuickBooks
                 }
                 if(result)
                     result = AddVendorBill(billList[0]);
+                if(!result)
+                {
+                    //xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
+                    //msg = $"Couldn't add invoice {invNo} for vendor {vendor} to QuickBooks: {billData.QBMessage}";
+                    //Status = msg;
+                    //LogIt.LogError(msg);
+                    //set_excel_status(xlRow, billData.QBStatus, billData.QBMessage);
+
+
+                }
             }
             return result;
         }
@@ -435,101 +465,6 @@ namespace QuickBooks
             return result;
         }
 
-
-        /// <summary>
-        /// adds a list of vendor bills to QuickBooks
-        /// </summary>
-        /// <param name="billList"></param>
-        /// <returns></returns>
-        //public bool AddVendorBills(List<BillData> billList)
-        //{
-        //    bool result = false;
-
-        //    // proceed if any vendor bills
-        //    if(billList.Count > 0)
-        //    {
-        //        bool sessionBegun = false;
-        //        bool connectionOpen = false;
-        //        RequestProcessor2 rp = null;
-        //        XmlDocument reqDoc = null;
-        //        XmlElement outer = null;
-        //        XmlElement inner = null;
-        //        string ticket = null;
-
-        //        try
-        //        {
-        //            OnStatusChanged(new StatusChangedEventArgs("Building XML document"));
-        //            reqDoc = new XmlDocument();
-        //            reqDoc.AppendChild(reqDoc.CreateXmlDeclaration("1.0", null, null));
-        //            reqDoc.AppendChild(reqDoc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
-
-        //            //Create the outer request envelope tag
-        //            outer = reqDoc.CreateElement("QBXML");
-        //            reqDoc.AppendChild(outer);
-
-        //            //Create the inner request envelope & any needed attributes
-        //            inner = reqDoc.CreateElement("QBXMLMsgsRq");
-        //            outer.AppendChild(inner);
-        //            inner.SetAttribute("onError", "continueOnError");
-
-        //            //Connect to QuickBooks and begin a session
-        //            OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));
-        //            rp = new RequestProcessor2();
-        //            rp.OpenConnection2("", "AIMM", QBXMLRPConnectionType.localQBD);
-        //            connectionOpen = true;
-        //            ticket = rp.BeginSession("", QBFileMode.qbFileOpenDoNotCare);
-        //            sessionBegun = true;
-
-        //            foreach(BillData billData in billList)
-        //            {
-        //                // get terms and due date
-        //                GetQbVendorInfo(rp, ticket, billData);
-        //                GetQbVendorDueDate(rp, ticket, billData);
-
-        //                // clear any old bill info, submit bill, get response
-        //                inner.IsEmpty = true;
-        //                BuildBillAddRq(reqDoc, inner, billData);
-        //                OnStatusChanged(new StatusChangedEventArgs($"Submitting invoice {billData.InvoiceNumber} to QuickBooks"));
-        //                string responseStr = rp.ProcessRequest(ticket, reqDoc.OuterXml);
-        //                WalkBillAddRs(responseStr, billData);
-
-        //            }
-        //            result = true;
-        //        }
-        //        catch(Exception ex)
-        //        {
-        //            var msg = $"Error occurred adding vendor bills: {ex.Message}";
-        //            OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));
-        //            LogIt.LogError(msg);
-        //            result = false;
-        //        }
-        //        finally
-        //        {
-        //            if(sessionBegun)
-        //            {
-        //                rp.EndSession(ticket);
-        //                sessionBegun = false;
-        //            }
-
-        //            if(connectionOpen)
-        //            {
-        //                rp.CloseConnection();
-        //                connectionOpen = false;
-        //            }
-
-        //            inner = null;
-        //            outer = null;
-        //            reqDoc = null;
-        //            rp = null;
-        //        }
-        //    }
-        //    return result;
-        //}
-
-
-
-
-
         /// <summary>
         /// creates an XmlElement to add to document
         /// </summary>
@@ -543,85 +478,6 @@ namespace QuickBooks
             elem.InnerText = tagVal ?? "";
             return elem;
         }
-
-        /// <summary>
-        /// creates a quickbooks bill add request for a single vendor invoice
-        /// </summary>
-        /// <param name="doc">xml document containing bill add requests</param>
-        /// <param name="parent">inner xml element to add requests to</param>
-        /// <param name="billData">object holding bill information</param>
-        //void BuildBillAddRq(XmlDocument doc, XmlElement parent, BillData billData)
-        //{
-        //    //// create BillAddRq aggregate
-        //    //XmlElement BillAddRq = doc.CreateElement("BillAddRq");
-        //    //parent.AppendChild(BillAddRq);
-
-        //    //// create BillAdd aggregate and fill in field values for it
-        //    //XmlElement BillAdd = doc.CreateElement("BillAdd");
-        //    //BillAddRq.AppendChild(BillAdd);
-
-        //    try
-        //    {
-        //        // create VendorRef aggregate and fill in field values for it
-        //        XmlElement VendorRef = doc.CreateElement("VendorRef");
-        //        BillAdd.AppendChild(VendorRef);
-        //        VendorRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.VendorFullName));
-
-        //        // create VendorAddress aggregate and fill in field values for it
-        //        XmlElement VendorAddress = doc.CreateElement("VendorAddress");
-        //        BillAdd.AppendChild(VendorAddress);
-        //        VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr1", billData.BillFrom1));
-        //        VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr2", billData.BillFrom2));
-        //        VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr3", billData.BillFrom3));
-        //        VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr4", billData.BillFrom4));
-        //        VendorAddress.AppendChild(MakeSimpleElem(doc, "Addr5", billData.BillFrom5));
-
-        //        // create APAccountRef aggregate and fill in field values for it
-        //        XmlElement APAccountRef = doc.CreateElement("APAccountRef");
-        //        BillAdd.AppendChild(APAccountRef);
-        //        APAccountRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.APAccount));
-
-        //        // set field value for TxnDate
-        //        BillAdd.AppendChild(MakeSimpleElem(doc, "TxnDate", billData.InvoiceDate.ToString("yyyy-MM-dd")));
-
-        //        // set field value for DueDate
-        //        BillAdd.AppendChild(MakeSimpleElem(doc, "DueDate", billData.DueDate.ToString("yyyy-MM-dd")));
-
-        //        // set field value for RefNumber
-        //        BillAdd.AppendChild(MakeSimpleElem(doc, "RefNumber", billData.InvoiceNumber));
-
-        //        //Create TermsRef aggregate and fill in field values for it
-        //        XmlElement TermsRef = doc.CreateElement("TermsRef");
-        //        BillAdd.AppendChild(TermsRef);
-        //        TermsRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.Terms));
-
-
-
-
-        //        // create ExpenseLineAdd aggregate and fill in field values for it
-        //        XmlElement ExpenseLineAdd = doc.CreateElement("ExpenseLineAdd");
-        //        BillAdd.AppendChild(ExpenseLineAdd);
-
-        //        XmlElement AccountRef = doc.CreateElement("AccountRef");
-        //        ExpenseLineAdd.AppendChild(AccountRef);
-        //        AccountRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.ExpenseAcct));
-
-        //        ExpenseLineAdd.AppendChild(MakeSimpleElem(doc, "Amount", billData.InvoiceAmount.ToString()));
-
-        //        XmlElement CustomerRef = doc.CreateElement("CustomerRef");
-        //        ExpenseLineAdd.AppendChild(CustomerRef);
-        //        CustomerRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.Customer));
-
-        //        XmlElement ClassRef = doc.CreateElement("ClassRef");
-        //        ExpenseLineAdd.AppendChild(ClassRef);
-        //        ClassRef.AppendChild(MakeSimpleElem(doc, "FullName", billData.ClassRef));
-
-        //    }
-        //    catch(Exception ex)
-        //    {
-        //        MessageBox.Show(ex.Message);
-        //    }
-        //}
 
         /// <summary>
         /// evaluates response from quickbooks and returns status and error message
@@ -1484,6 +1340,116 @@ namespace QuickBooks
         }
 
         /// <summary>
+        /// Lookup customer in QuickBooks
+        /// </summary>
+        /// <param name="rp">instantiated request processor with open session</param>
+        /// <param name="ticket">existing session ticket</param>
+        /// <param name="billData"><see cref="BillData"/> object containing customer name</param>
+        /// <returns>boolean indicating whether customer is in quickbooks</returns>
+        bool valid_qb_customer(RequestProcessor2 rp, string ticket, BillData billData)
+        {
+            XmlDocument doc = null;
+            XmlElement docOuter = null;
+            XmlElement docInner = null;
+            XmlElement CustomerQueryRq = null;
+            XmlDocument responseXmlDoc = null;
+            XmlNodeList CustomerQueryRsList = null;
+            XmlNode responseNode = null;
+            XmlAttributeCollection rsAttributes = null;
+            XmlNodeList CustomerRetList = null;
+            XmlNode CustomerRet = null;
+            bool isValid = false;
+
+            try
+            {
+                // create doc and request envelope tags
+                doc = new XmlDocument();
+                doc.AppendChild(doc.CreateXmlDeclaration("1.0", null, null));
+                doc.AppendChild(doc.CreateProcessingInstruction("qbxml", "version=\"13.0\""));
+
+                docOuter = doc.CreateElement("QBXML");
+                doc.AppendChild(docOuter);
+
+                docInner = doc.CreateElement("QBXMLMsgsRq");
+                docOuter.AppendChild(docInner);
+                docInner.SetAttribute("onError", "continueOnError");
+
+                CustomerQueryRq = doc.CreateElement("CustomerQueryRq");
+                docInner.AppendChild(CustomerQueryRq);
+
+                //Set field value for FullName
+                CustomerQueryRq.AppendChild(MakeSimpleElem(doc, "FullName", billData.Customer));
+
+                //Send the request and get the response from QuickBooks
+                string responseStr = rp.ProcessRequest(ticket, doc.OuterXml);
+
+                //Parse the response XML string into an XmlDocument
+                responseXmlDoc = new XmlDocument();
+                responseXmlDoc.LoadXml(responseStr);
+
+                //Get the response for our request
+                CustomerQueryRsList = responseXmlDoc.GetElementsByTagName("CustomerQueryRs");
+                responseNode = CustomerQueryRsList.Item(0);
+
+                //Check the status code, info, and severity
+                rsAttributes = responseNode.Attributes;
+                string statusCode = rsAttributes.GetNamedItem("statusCode").Value;
+                string statusSeverity = rsAttributes.GetNamedItem("statusSeverity").Value;
+                string statusMessage = rsAttributes.GetNamedItem("statusMessage").Value;
+
+                //status code = 0 all OK, > 0 is error
+                if(Convert.ToInt32(statusCode) == 0)
+                {
+                    CustomerRetList = responseNode.SelectNodes("//CustomerRet");
+                    if(CustomerRetList.Count > 0 && CustomerRetList.Item(0) != null)
+                    {
+                        // if we're here, the customer is valid.
+                        // leave this in in case we later want to return customer data instead of bool.
+                        CustomerRet = CustomerRetList.Item(0);
+                        isValid = true;
+                    }
+                    else
+                    {
+                        var msg = $"Could not find customer \"{billData.Customer}\" in QuickBooks";
+                        LogIt.LogError(msg);
+                        billData.QBStatus = "Error";
+                        billData.QBMessage = msg;
+                    } // returned at least 1 valid customer
+                }
+                else
+                {
+                    LogIt.LogError($"Could not do customer lookup for \"{billData.Customer}\" in QuickBooks");
+                    billData.QBStatus = statusSeverity;
+                    billData.QBMessage = statusMessage;
+                } // valid response status code
+            }
+            catch(Exception ex)
+            {
+                var msg = $"Error looking up customer \"{billData.Customer}\" in QuickBooks: {ex.Message}";
+                LogIt.LogError(msg);
+                billData.QBStatus = "Error";
+                billData.QBMessage = msg;
+            }
+            finally
+            {
+                CustomerRet = null;
+                CustomerRetList = null;
+                rsAttributes = null;
+                responseNode = null;
+                CustomerQueryRsList = null;
+                responseXmlDoc = null;
+                CustomerQueryRq = null;
+                docInner = null;
+                docOuter = null;
+                doc = null;
+            }
+            return isValid;
+        }
+
+
+
+
+        /// <summary>
         /// Lookup vendor in Quickbooks, get terms and address info
         /// </summary>
         /// <param name="rp">instantiated request processor with open session</param>
@@ -1694,14 +1660,6 @@ namespace QuickBooks
                 if(Convert.ToInt32(statusCode) == 0)
                 {
 
-                    //ORList = responseNode.SelectNodes("//OR");
-                    //if(ORList.Count > 0 && ORList.Item(0) != null)
-                    //{
-                    //    OR = ORList.Item(0);
-
-                    //    // decide whether to use standard or date-driven terms info
-                    //    StandardTermsRet = OR.SelectSingleNode("./StandardTermsRet");
-                    //    DateDrivenTermsRet = OR.SelectSingleNode("./DateDrivenTermsRet");
                     StandardTermsRet = responseNode.SelectSingleNode("./StandardTermsRet");
                     DateDrivenTermsRet = responseNode.SelectSingleNode("./DateDrivenTermsRet");
 

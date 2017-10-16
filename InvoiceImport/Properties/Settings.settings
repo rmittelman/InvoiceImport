@@ -11,22 +11,22 @@
       <Value Profile="(Default)">Data Source=POLSQL;Initial Catalog=MLG;User ID=polsqluser;Password=Pol113388</Value>
     </Setting>
     <Setting Name="SourceFolder" Type="System.String" Scope="Application">
-      <Value Profile="(Default)">Z:\AIMM Vendor Invoice Import</Value>
+      <Value Profile="(Default)">Z:\AIMM Automation\Vendor Invoice Import</Value>
     </Setting>
     <Setting Name="ShowExcel" Type="System.Boolean" Scope="Application">
       <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="LogFolder" Type="System.String" Scope="Application">
-      <Value Profile="(Default)">Z:\AIMM Vendor Invoice Import\Logs</Value>
+      <Value Profile="(Default)">Z:\AIMM Automation\Vendor Invoice Import\Logs</Value>
     </Setting>
     <Setting Name="ArchiveFolder" Type="System.String" Scope="Application">
-      <Value Profile="(Default)">Z:\AIMM Vendor Invoice Import\Archive</Value>
+      <Value Profile="(Default)">Z:\AIMM Automation\Vendor Invoice Import\Archive</Value>
     </Setting>
     <Setting Name="PdfFolder" Type="System.String" Scope="Application">
-      <Value Profile="(Default)">Z:\AIMM Vendor Invoice Import\PDFs</Value>
+      <Value Profile="(Default)">Z:\AIMM Automation\Vendor Invoice Import\PDFs</Value>
     </Setting>
     <Setting Name="ErrorFolder" Type="System.String" Scope="Application">
-      <Value Profile="(Default)">Z:\AIMM Vendor Invoice Import\Errors</Value>
+      <Value Profile="(Default)">Z:\AIMM Automation\Vendor Invoice Import\Errors</Value>
     </Setting>
     <Setting Name="APAcct" Type="System.String" Scope="Application">
       <Value Profile="(Default)">Accounts Payable</Value>

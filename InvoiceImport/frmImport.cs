@@ -108,7 +108,16 @@ namespace InvoiceImport
 
         #region properties
 
-        public string Status { set { txtStatus.Text = value; } }
+        private string _status;
+        public string Status
+        {
+            set
+            {
+                _status = value;
+                txtStatus.Text = value;
+            }
+            get { return _status; }
+        }
 
         #endregion
 
@@ -202,6 +211,7 @@ namespace InvoiceImport
 
             var addToAimm = ckAddToAIMM.Checked;
             var addToQB = ckAddToQB.Checked;
+            string msg = "";
 
             // continue if we can open excel file
             xlPathName = txtExcelFile.Text;
@@ -226,7 +236,6 @@ namespace InvoiceImport
                             isValid = true;
                             var billData = new BillData();
                             DateTime invDate = new DateTime();
-                            string tempDate = "";
                             int jobID = 0;
                             string woNo = "";
                             Single invAmt = 0;
@@ -249,7 +258,7 @@ namespace InvoiceImport
                             if(invNo != "")
                             {
                                 billData.InvoiceNumber = invNo;
-                                var msg = $"Got invoice {invNo} for vendor {vendor}";
+                                msg = $"Got invoice {invNo} for vendor {vendor}";
                                 Status = msg;
                                 LogIt.LogInfo(msg);
 
@@ -266,26 +275,20 @@ namespace InvoiceImport
                                 {
                                     billData.VendorFullName = vfn;
 
-
                                     // validate invoice date is date
                                     // try both date number and string date conversion just in case
                                     xlCell = xlRow.Cells[cols.invDate];
-                                    tempDate = (xlCell.Value ?? "");
-                                    if(tempDate == "")
-                                        isValid = false;
-                                    else
+                                    try
                                     {
-                                        try
-                                        {
-                                            invDate = DateTime.FromOADate(xlCell.Value);
-                                            isValid = true;
-                                        }
-                                        catch(Exception)
-                                        {
-                                            isValid = DateTime.TryParse(tempDate, out invDate);
-                                        }
-
+                                        // using value2 for date because it returns excel OA date
+                                        invDate = DateTime.FromOADate(xlCell.Value2);
+                                        isValid = true;
                                     }
+                                    catch(Exception)
+                                    {
+                                        isValid = DateTime.TryParse(xlCell.Value, out invDate);
+                                    }
+
                                     if(isValid)
                                     {
                                         billData.InvoiceDate = invDate;
@@ -322,79 +325,100 @@ namespace InvoiceImport
                                                             {
                                                                 billData.Customer = jobCust;
 
-                                                                // validate expense acct is present
-                                                                var expAcct = "";
-                                                                xlCell = xlRow.Cells[cols.expAcct];
-                                                                expAcct = (xlCell.Value ?? "").ToString().Trim();
-                                                                if(expAcct == "0")
-                                                                    expAcct = "";
-                                                                if(expAcct != "")
+                                                                // validate customer in QB if needed
+                                                                bool QbOk = true;
+                                                                if(addToQB)
+                                                                    QbOk = qb.IsQbCustomer(billData);
+
+                                                                if(QbOk)
                                                                 {
-                                                                    billData.ExpenseAcct = expAcct;
-
-                                                                    // add invoice to aimm, get jobWO if successful
-                                                                    if(addToAimm)
+                                                                    // validate expense acct is present
+                                                                    var expAcct = "";
+                                                                    xlCell = xlRow.Cells[cols.expAcct];
+                                                                    expAcct = (xlCell.Value ?? "").ToString().Trim();
+                                                                    if(expAcct == "0")
+                                                                        expAcct = "";
+                                                                    if(expAcct != "")
                                                                     {
-                                                                        jobWO = add_invoice_to_job(jobID, woNo, vendorID, invNo, invAmt, invDesc, connString);
-                                                                        isValid = (jobWO.Length != 0);
-                                                                        if(isValid)
-                                                                        {
-                                                                            var msg = $"Added invoice {invNo} for vendor {vendor} to job {jobWO}";
-                                                                            Status = msg;
-                                                                            LogIt.LogInfo(msg);
-                                                                        }
-                                                                        else
-                                                                        {
-                                                                            (xlRow.Cells[cols.invNum]).Interior.ColorIndex = 3;
-                                                                            LogIt.LogError($"Couldn't add invoice {invNo} for vendor {vendor} to job ID {jobWO}");
-                                                                            set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
-                                                                        } // added aimm invoice
+                                                                        billData.ExpenseAcct = expAcct;
 
-                                                                    }
-
-                                                                    // add qb vendor bill if standard, else save for later
-                                                                    if(addToQB)
-                                                                    {
-                                                                        if(importType == importTypes.standard)
+                                                                        // add invoice to aimm, get jobWO if successful
+                                                                        if(addToAimm)
                                                                         {
-                                                                            qbValid = qb.AddStandardVendorBill(billData);
-                                                                            if(qbValid)
+                                                                            jobWO = add_invoice_to_job(jobID, woNo, vendorID, invNo, invAmt, invDesc, connString);
+                                                                            isValid = (jobWO.Length != 0);
+                                                                            if(isValid)
                                                                             {
-                                                                                var msg = $"Added invoice {invNo} for vendor {vendor} to QuickBooks";
+                                                                                msg = $"Added invoice {invNo} for vendor {vendor} to job {jobWO}";
                                                                                 Status = msg;
                                                                                 LogIt.LogInfo(msg);
                                                                             }
                                                                             else
                                                                             {
-                                                                                xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
-                                                                                var msg = $"Couldn't add invoice {invNo} for vendor {vendor} to QuickBooks: {billData.QBMessage}";
-                                                                                Status = msg;
-                                                                                LogIt.LogError(msg);
-                                                                                set_excel_status(xlRow, billData.QBStatus, billData.QBMessage);
+                                                                                (xlRow.Cells[cols.invNum]).Interior.ColorIndex = 3;
+                                                                                LogIt.LogError($"Couldn't add invoice {invNo} for vendor {vendor} to job ID {jobWO}");
+                                                                                set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
+                                                                            } // added aimm invoice
+
+                                                                        }
+
+                                                                        // add qb vendor bill if standard, else save for later
+                                                                        if(addToQB)
+                                                                        {
+                                                                            if(importType == importTypes.standard)
+                                                                            {
+                                                                                qbValid = qb.AddStandardVendorBill(billData);
+                                                                                if(qbValid)
+                                                                                {
+                                                                                    msg = $"Added invoice {invNo} for vendor {vendor} to QuickBooks";
+                                                                                    Status = msg;
+                                                                                    LogIt.LogInfo(msg);
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                                    xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
+                                                                                    msg = $"Couldn't add invoice {invNo} for vendor {vendor} to QuickBooks: {billData.QBMessage}";
+                                                                                    Status = msg;
+                                                                                    LogIt.LogError(msg);
+                                                                                    set_excel_status(xlRow, billData.QBStatus, billData.QBMessage);
+                                                                                }
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                billList.Add(billData);
+                                                                                qbValid = true;
                                                                             }
                                                                         }
-                                                                        else
-                                                                        {
-                                                                            billList.Add(billData);
-                                                                            qbValid = true;
-                                                                        }
-                                                                    }
 
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
+                                                                        msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing expense account";
+                                                                        LogIt.LogError(msg);
+                                                                        isValid = false;
+                                                                        set_excel_status(xlRow, "Error", "Missing expense account");
+                                                                    } // valid expense account
 
                                                                 }
                                                                 else
                                                                 {
-                                                                    xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
-                                                                    LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing expense account");
                                                                     isValid = false;
-                                                                } // valid expense account
+                                                                    xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
+                                                                    msg = $"Error getting QuickBooks customer, invoice: {invNo}, vendor: {vendor}: {billData.QBMessage}";
+                                                                    Status = msg;
+                                                                    LogIt.LogError(msg);
+                                                                    set_excel_status(xlRow, billData.QBStatus, billData.QBMessage);
+                                                                }
 
                                                             }
                                                             else
                                                             {
                                                                 (xlRow.Cells[cols.invNum]).Interior.ColorIndex = 3;
-                                                                LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has missing customer");
+                                                                msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has missing customer";
+                                                                LogIt.LogError(msg);
                                                                 isValid = false;
+                                                                set_excel_status(xlRow, "Error", "Missing customer");
                                                             } // valid customer
 
                                                         }
@@ -445,7 +469,7 @@ namespace InvoiceImport
                                     else
                                     {
                                         isValid = false;
-                                        var msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad date: {invDate}";
+                                        msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad date: {invDate}";
                                         xlCell.Interior.ColorIndex = 3;
                                         set_excel_status(xlRow, "Error", "Bad invoice date");
                                         LogIt.LogError(msg);
@@ -455,7 +479,7 @@ namespace InvoiceImport
                                 else
                                 {
                                     isValid = false;
-                                    var msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing full name";
+                                    msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing full name";
                                     xlRow.Cells[cols.vendor].Interior.ColorIndex = 3;
                                     set_excel_status(xlRow, "Error", "Missing vendor full name");
                                     LogIt.LogError(msg);
@@ -465,7 +489,7 @@ namespace InvoiceImport
                             else
                             {
                                 isValid = false;
-                                var msg = $"Invoice number missing for vendor \"{vendor}\" in file \"{xlFile}\"";
+                                msg = $"Invoice number missing for vendor \"{vendor}\" in file \"{xlFile}\"";
                                 xlCell.Interior.ColorIndex = 3;
                                 set_excel_status(xlRow, "Error", "Missing invoice number");
                                 LogIt.LogError(msg);
@@ -493,7 +517,6 @@ namespace InvoiceImport
                         destPathName = Path.Combine(destPath, destFile);
                         if(move_file(xlPathName, destPathName))
                         {
-                            var msg = "";
                             txtExcelFile.Text = destPathName;
                             if(allValid)
                             {
@@ -510,7 +533,7 @@ namespace InvoiceImport
                     }
                     catch(Exception ex)
                     {
-                        var msg = $"Error processing Excel file \"{xlFile}\": {ex.Message}";
+                        msg = $"Error processing Excel file \"{xlFile}\": {ex.Message}";
                         LogIt.LogError(msg);
                         MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                         Status = msg;
@@ -519,7 +542,7 @@ namespace InvoiceImport
                 }
                 else
                 {
-                    var msg = "Could not connect to QuickBooks";
+                    msg = "Could not connect to QuickBooks";
                     LogIt.LogError(msg);
                     MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                     Status = msg;
@@ -532,7 +555,7 @@ namespace InvoiceImport
             }
             else
             {
-                var msg = $"Could not find Excel file \"{xlPathName}\"";
+                msg = $"Could not find Excel file \"{xlPathName}\"";
                 LogIt.LogError(msg);
                 MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                 Status = msg;
@@ -629,215 +652,215 @@ namespace InvoiceImport
             }
         }
 
-        private void btnQuickBooks_Click(object sender, EventArgs e)
-        {
-            xlPathName = txtExcelFile.Text;
-            var xlFile = Path.GetFileName(xlPathName);
-            Status = $"Opening Excel file \"{xlFile}\"";
-            if(open_excel(xlPathName))
-            {
-                var billList = new List<BillData>();
-                try
-                {
-                    allValid = true;
+        //private void btnQuickBooks_Click(object sender, EventArgs e)
+        //{
+        //    xlPathName = txtExcelFile.Text;
+        //    var xlFile = Path.GetFileName(xlPathName);
+        //    Status = $"Opening Excel file \"{xlFile}\"";
+        //    if(open_excel(xlPathName))
+        //    {
+        //        var billList = new List<BillData>();
+        //        try
+        //        {
+        //            allValid = true;
 
-                    // loop thru each invoice row on worksheet
-                    foreach(Excel.Range xlRow in xlRange.Rows)
-                    {
-                        isValid = true;
-                        var billData = new BillData();
-                        billData.APAccount = apAcct;
-                        billData.ClassRef = billClass;
+        //            // loop thru each invoice row on worksheet
+        //            foreach(Excel.Range xlRow in xlRange.Rows)
+        //            {
+        //                isValid = true;
+        //                var billData = new BillData();
+        //                billData.APAccount = apAcct;
+        //                billData.ClassRef = billClass;
 
-                        // get non-validated data for the invoice
-                        xlCell = (Excel.Range)xlRow.Cells[cols.vendor];
-                        string vendor = (xlCell.Value2 ?? "").ToString();
+        //                // get non-validated data for the invoice
+        //                xlCell = (Excel.Range)xlRow.Cells[cols.vendor];
+        //                string vendor = (xlCell.Value2 ?? "").ToString();
 
-                        xlCell = (Excel.Range)xlRow.Cells[cols.invNum];
-                        string invNo = (xlCell.Value2 ?? "").ToString();
+        //                xlCell = (Excel.Range)xlRow.Cells[cols.invNum];
+        //                string invNo = (xlCell.Value2 ?? "").ToString();
 
-                        // if blank items, we're done
-                        if(vendor == "" || invNo == "")
-                            break;
+        //                // if blank items, we're done
+        //                if(vendor == "" || invNo == "")
+        //                    break;
 
-                        billData.InvoiceNumber = invNo;
-                        Status = $"Processing invoice {invNo}";
+        //                billData.InvoiceNumber = invNo;
+        //                Status = $"Processing invoice {invNo}";
 
-                        xlCell = (Excel.Range)xlRow.Cells[cols.fullName];
-                        billData.VendorFullName = (xlCell.Value2 ?? "").ToString();
-                        if(billData.VendorFullName == "0")
-                            billData.VendorFullName = "";
+        //                xlCell = (Excel.Range)xlRow.Cells[cols.fullName];
+        //                billData.VendorFullName = (xlCell.Value2 ?? "").ToString();
+        //                if(billData.VendorFullName == "0")
+        //                    billData.VendorFullName = "";
 
-                        //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom1];
-                        //billData.BillFrom1 = (xlCell.Value2 ?? "").ToString();
-                        //if(billData.BillFrom1 == "0")
-                        //    billData.BillFrom1 = "";
+        //                //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom1];
+        //                //billData.BillFrom1 = (xlCell.Value2 ?? "").ToString();
+        //                //if(billData.BillFrom1 == "0")
+        //                //    billData.BillFrom1 = "";
 
-                        //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom2];
-                        //billData.BillFrom2 = (xlCell.Value2 ?? "").ToString();
-                        //if(billData.BillFrom2 == "0")
-                        //    billData.BillFrom2 = "";
+        //                //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom2];
+        //                //billData.BillFrom2 = (xlCell.Value2 ?? "").ToString();
+        //                //if(billData.BillFrom2 == "0")
+        //                //    billData.BillFrom2 = "";
 
-                        //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom3];
-                        //billData.BillFrom3 = (xlCell.Value2 ?? "").ToString();
-                        //if(billData.BillFrom3 == "0")
-                        //    billData.BillFrom3 = "";
+        //                //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom3];
+        //                //billData.BillFrom3 = (xlCell.Value2 ?? "").ToString();
+        //                //if(billData.BillFrom3 == "0")
+        //                //    billData.BillFrom3 = "";
 
-                        //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom4];
-                        //billData.BillFrom4 = (xlCell.Value2 ?? "").ToString();
-                        //if(billData.BillFrom4 == "0")
-                        //    billData.BillFrom4 = "";
+        //                //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom4];
+        //                //billData.BillFrom4 = (xlCell.Value2 ?? "").ToString();
+        //                //if(billData.BillFrom4 == "0")
+        //                //    billData.BillFrom4 = "";
 
-                        //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom5];
-                        //billData.BillFrom5 = (xlCell.Value2 ?? "").ToString();
-                        //if(billData.BillFrom5 == "0")
-                        //    billData.BillFrom5 = "";
+        //                //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom5];
+        //                //billData.BillFrom5 = (xlCell.Value2 ?? "").ToString();
+        //                //if(billData.BillFrom5 == "0")
+        //                //    billData.BillFrom5 = "";
 
-                        // get and validate remaining items
-                        DateTime invDate = new DateTime();
-                        Single invAmt;
-                        int jobID;
-                        string expAcct;
+        //                // get and validate remaining items
+        //                DateTime invDate = new DateTime();
+        //                Single invAmt;
+        //                int jobID;
+        //                string expAcct;
 
-                        // validate invoice date is date
-                        // try both date number and string date conversion just in case
-                        xlCell = (Excel.Range)xlRow.Cells[cols.invDate];
-                        if(xlCell.Value2 == null)
-                            isValid = false;
-                        else
-                        {
-                            try
-                            {
-                                invDate = DateTime.FromOADate(xlCell.Value2);
-                                isValid = true;
-                            }
-                            catch(Exception)
-                            {
-                                isValid = DateTime.TryParse(xlCell.Value2.ToString(), out invDate);
-                            }
+        //                // validate invoice date is date
+        //                // try both date number and string date conversion just in case
+        //                xlCell = (Excel.Range)xlRow.Cells[cols.invDate];
+        //                if(xlCell.Value2 == null)
+        //                    isValid = false;
+        //                else
+        //                {
+        //                    try
+        //                    {
+        //                        invDate = DateTime.FromOADate(xlCell.Value2);
+        //                        isValid = true;
+        //                    }
+        //                    catch(Exception)
+        //                    {
+        //                        isValid = DateTime.TryParse(xlCell.Value2.ToString(), out invDate);
+        //                    }
 
-                        }
-                        if(isValid)
-                        {
-                            billData.InvoiceDate = invDate;
+        //                }
+        //                if(isValid)
+        //                {
+        //                    billData.InvoiceDate = invDate;
 
-                            // validate invAmt is numeric
-                            xlCell = (Excel.Range)xlRow.Cells[cols.invAmt];
-                            if(Single.TryParse(xlCell.Value2.ToString(), out invAmt))
-                            {
-                                billData.InvoiceAmount = invAmt;
+        //                    // validate invAmt is numeric
+        //                    xlCell = (Excel.Range)xlRow.Cells[cols.invAmt];
+        //                    if(Single.TryParse(xlCell.Value2.ToString(), out invAmt))
+        //                    {
+        //                        billData.InvoiceAmount = invAmt;
 
-                                // validate jobID is numeric
-                                xlCell = (Excel.Range)xlRow.Cells[cols.jobID];
-                                if(int.TryParse(xlCell.Value2.ToString(), out jobID))
-                                {
-                                    // get customer for job
-                                    string jobCust = (string)get_job_customer(jobID, connString);
-                                    if(jobCust == null)
-                                    {
-                                        xlCell = (Excel.Range)xlRow.Cells[cols.invNum];
-                                        xlCell.Interior.ColorIndex = 44;
-                                        LogIt.LogWarn($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has missing customer");
-                                        billData.Customer = "";
-                                        isValid = false;
-                                    }
-                                    else
-                                    {
-                                        billData.Customer = jobCust;
-                                        Status = $"Got customer: {jobCust}";
-                                    } // valid customer
+        //                        // validate jobID is numeric
+        //                        xlCell = (Excel.Range)xlRow.Cells[cols.jobID];
+        //                        if(int.TryParse(xlCell.Value2.ToString(), out jobID))
+        //                        {
+        //                            // get customer for job
+        //                            string jobCust = (string)get_job_customer(jobID, connString);
+        //                            if(jobCust == null)
+        //                            {
+        //                                xlCell = (Excel.Range)xlRow.Cells[cols.invNum];
+        //                                xlCell.Interior.ColorIndex = 44;
+        //                                LogIt.LogWarn($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has missing customer");
+        //                                billData.Customer = "";
+        //                                isValid = false;
+        //                            }
+        //                            else
+        //                            {
+        //                                billData.Customer = jobCust;
+        //                                Status = $"Got customer: {jobCust}";
+        //                            } // valid customer
 
-                                    // validate expense acct is present
-                                    xlCell = (Excel.Range)xlRow.Cells[cols.expAcct];
-                                    expAcct = (xlCell.Value2 ?? "").ToString();
-                                    if(expAcct == "0")
-                                        expAcct = "";
-                                    if(expAcct == "")
-                                    {
-                                        ((Excel.Range)xlRow.Cells[cols.invAmt]).Interior.ColorIndex = 44;
-                                        LogIt.LogWarn($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing expense account");
-                                        billData.ExpenseAcct = "";
-                                        isValid = false;
-                                    }
-                                    else
-                                    {
-                                        billData.ExpenseAcct = expAcct;
-                                    } // valid expense account
+        //                            // validate expense acct is present
+        //                            xlCell = (Excel.Range)xlRow.Cells[cols.expAcct];
+        //                            expAcct = (xlCell.Value2 ?? "").ToString();
+        //                            if(expAcct == "0")
+        //                                expAcct = "";
+        //                            if(expAcct == "")
+        //                            {
+        //                                ((Excel.Range)xlRow.Cells[cols.invAmt]).Interior.ColorIndex = 44;
+        //                                LogIt.LogWarn($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing expense account");
+        //                                billData.ExpenseAcct = "";
+        //                                isValid = false;
+        //                            }
+        //                            else
+        //                            {
+        //                                billData.ExpenseAcct = expAcct;
+        //                            } // valid expense account
 
-                                    //// get terms, calculate due date
-                                    //xlCell = (Excel.Range)xlRow.Cells[cols.terms];
-                                    //var terms = (xlCell.Value2 ?? "").ToString();
-                                    //if(terms == "0")
-                                    //    terms = "";
-                                    //billData.Terms = terms;
-                                    //billData.DueDate = get_due_date(vendor, invDate, terms);
+        //                            //// get terms, calculate due date
+        //                            //xlCell = (Excel.Range)xlRow.Cells[cols.terms];
+        //                            //var terms = (xlCell.Value2 ?? "").ToString();
+        //                            //if(terms == "0")
+        //                            //    terms = "";
+        //                            //billData.Terms = terms;
+        //                            //billData.DueDate = get_due_date(vendor, invDate, terms);
 
-                                    // add the QB invoice
-                                    billList.Add(billData);
+        //                            // add the QB invoice
+        //                            billList.Add(billData);
 
-                                }
-                                else
-                                {
-                                    isValid = false;
-                                } // valid job id
+        //                        }
+        //                        else
+        //                        {
+        //                            isValid = false;
+        //                        } // valid job id
 
-                            }
-                            else
-                            {
-                                var msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad invoice amount: {xlCell.Value2.ToString()}";
-                                ((Excel.Range)xlRow.Cells[cols.invAmt]).Interior.ColorIndex = 3;
-                                Status = msg;
-                                LogIt.LogError(msg);
-                                isValid = false;
-                            } // inv amt is numeric
-
-
-                        }
-                        else
-                        {
-                            var msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad date: {xlCell.Value2.ToString()}";
-                            ((Excel.Range)xlRow.Cells[cols.invDate]).Interior.ColorIndex = 3;
-                            Status = msg;
-                            LogIt.LogError(msg);
-                            isValid = false;
-                        } // valid date
-
-                        allValid = allValid && isValid;
-                        Status = $"Processed invoice # {invNo}";
-                    }
-
-                    // post the data to quickbooks
-                    var qb = new QuickBooks.QuickBooks();
-                    qb.StatusChanged += qb_StatusChanged;
-
-                    var isOk = qb.AddStockVendorBills(billList);
-                    if(isOk)
-                    {
-                        // update excel with results
-                        bool anyErrors = update_excel(billList);
-                        allValid = allValid && !anyErrors;
-                    }
-                    isOk = close_excel(!allValid);
-                    qb = null;
+        //                    }
+        //                    else
+        //                    {
+        //                        var msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad invoice amount: {xlCell.Value2.ToString()}";
+        //                        ((Excel.Range)xlRow.Cells[cols.invAmt]).Interior.ColorIndex = 3;
+        //                        Status = msg;
+        //                        LogIt.LogError(msg);
+        //                        isValid = false;
+        //                    } // inv amt is numeric
 
 
-                }
-                catch(Exception ex)
-                {
-                    var msg = $"Error processing Excel file \"{xlFile}\": {ex.Message}";
-                    MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                    Status = msg;
-                    LogIt.LogError(msg);
-                }
-            }
-            else
-            {
-                var msg = $"Could not find Excel file \"{xlPathName}\"";
-                Status = msg;
-                MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-            }
+        //                }
+        //                else
+        //                {
+        //                    var msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad date: {xlCell.Value2.ToString()}";
+        //                    ((Excel.Range)xlRow.Cells[cols.invDate]).Interior.ColorIndex = 3;
+        //                    Status = msg;
+        //                    LogIt.LogError(msg);
+        //                    isValid = false;
+        //                } // valid date
 
-        }
+        //                allValid = allValid && isValid;
+        //                Status = $"Processed invoice # {invNo}";
+        //            }
+
+        //            // post the data to quickbooks
+        //            var qb = new QuickBooks.QuickBooks();
+        //            qb.StatusChanged += qb_StatusChanged;
+
+        //            var isOk = qb.AddStockVendorBills(billList);
+        //            if(isOk)
+        //            {
+        //                // update excel with results
+        //                bool anyErrors = update_excel(billList);
+        //                allValid = allValid && !anyErrors;
+        //            }
+        //            isOk = close_excel(!allValid);
+        //            qb = null;
+
+
+        //        }
+        //        catch(Exception ex)
+        //        {
+        //            var msg = $"Error processing Excel file \"{xlFile}\": {ex.Message}";
+        //            MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+        //            Status = msg;
+        //            LogIt.LogError(msg);
+        //        }
+        //    }
+        //    else
+        //    {
+        //        var msg = $"Could not find Excel file \"{xlPathName}\"";
+        //        Status = msg;
+        //        MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+        //    }
+
+        //}
 
         private void qb_StatusChanged(object sender, StatusChangedEventArgs e)
         {
@@ -926,6 +949,8 @@ namespace InvoiceImport
         private bool open_excel(string fileName)
         {
             bool result = false;
+            string msg = "";
+
             if(File.Exists(fileName))
             {
                 var xlFile = Path.GetFileName(fileName);
@@ -933,17 +958,37 @@ namespace InvoiceImport
                 {
                     oXl = new clsExcel();
                     oXl.Visible = showExcel;
-                    result = oXl.OpenExcel(xlPathName);//, "1");
+                    result = oXl.OpenExcel(xlPathName);
                     if(result)
+                    {
+                        msg = $"Opened Excel file {xlFile}";
+                        Status = msg;
+                        LogIt.LogInfo(msg);
+
                         result = oXl.GetRange("invoices");
-                    if(result)
-                        LogIt.LogInfo($"Opened Excel file \"{xlFile}\"");
+                        if(result)
+                        {
+                            msg = "Identified active invoice range";
+                            Status = msg;
+                            LogIt.LogInfo(msg);
+                        }
+                        else
+                        {
+                            msg = "Could not identify active invoice range";
+                            Status = msg;
+                            LogIt.LogError(msg);
+                        }
+                    }
                     else
-                        LogIt.LogError($"Could not open Excel file \"{xlFile}\"");
+                    {
+                        msg = $"Could not open Excel file \"{xlFile}\"";
+                        Status = msg;
+                        LogIt.LogError(msg);
+                    }
                 }
                 catch(Exception ex)
                 {
-                    var msg = $"Error opening Excel file \"{xlFile}\": {ex.Message}";
+                    msg = $"Error opening Excel file \"{xlFile}\": {ex.Message}";
                     MessageBox.Show(msg, "Error", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Exclamation);
                     LogIt.LogError(msg);
                     result = false;
@@ -951,7 +996,7 @@ namespace InvoiceImport
             }
             else
             {
-                var msg = $"Could not find Excel file \"{xlFile}\"";
+                msg = $"Could not find Excel file \"{xlFile}\"";
                 LogIt.LogError(msg);
                 result = false;
             }
@@ -972,6 +1017,8 @@ namespace InvoiceImport
                 }
                 else
                     row.Cells[cols.message].Value = message;
+                    row.Cells[cols.message].Style.WrapText = true;
+                    row.EntireRow.AutoFit();
             }
         }
 
