@@ -1,20 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
-using Excel = Microsoft.Office.Interop.Excel;
 using System.IO;
 using System.Data;
 using System.Data.SqlClient;
 using Aimm.Logging;
-using System.ComponentModel;
-using System.Drawing;
 using System.Windows.Forms;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using QuickBooks;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Excel = Microsoft.Office.Interop.Excel;
+using System.ComponentModel;
+using System.Drawing;
+using System.Xml;
 
 namespace InvoiceImport
 {
@@ -30,20 +31,22 @@ namespace InvoiceImport
         }
 
         #region enums
+
         enum cols
         {
             vendor = 1,
-            invNum = 2,
-            invDate = 3,
-            jobID = 4,
-            woNum = 5,
-            invAmt = 6,
-            invDesc = 7,
-            vendorID = 8,
-            fullName = 9,
-            expAcct = 10,
-            status = 11,
-            message = 12
+            invType = 2,
+            invNum = 3,
+            invDate = 4,
+            jobID = 5,
+            woNum = 6,
+            invAmt = 7,
+            invDesc = 8,
+            vendorID = 9,
+            fullName = 10,
+            expAcct = 11,
+            status = 12,
+            message = 13
         }
 
         enum importTypes
@@ -57,16 +60,9 @@ namespace InvoiceImport
         #region objects
 
         clsExcel oXl = null;
-
-        dynamic xlRange = null;
         dynamic xlCell = null;
-
-        //Excel.Application xlApp = null;
-        //Excel.Workbook xlWorkbook = null;
-        //Excel._Worksheet xlWorksheet = null;
-        //Excel.Range xlRange = null;
-        //Excel.Range xlCell = null;
         ToolTip toolTip1 = new ToolTip();
+        QuickBooks.QuickBooks qb = null;
         #endregion
 
         #region variables
@@ -77,7 +73,6 @@ namespace InvoiceImport
         //private Point pt = new Point();
 
         string connString = Properties.Settings.Default.POLSQL;
-        importTypes importType;
 
         // for displaying log
         // private static string newLogLine = "";
@@ -86,14 +81,15 @@ namespace InvoiceImport
         bool qbValid = false;
         bool allValid = true;
 
-        string sourcePath = Properties.Settings.Default.SourceFolder;
-        string archivePath = Properties.Settings.Default.ArchiveFolder;
-        string errorPath = Properties.Settings.Default.ErrorFolder;
-        string logPath = Properties.Settings.Default.LogFolder;
-        string pdfDestPath = Properties.Settings.Default.PdfFolder;
-        bool showExcel = (bool)Properties.Settings.Default.ShowExcel;
-        string apAcct = Properties.Settings.Default.APAcct;
-        string billClass = Properties.Settings.Default.BillClass;
+        string sourcePath = "";
+        string archivePath = "";
+        string errorPath = "";
+        string logPath = "";
+        string pdfDestPath = "";
+        bool showExcel = true;
+        string apAcct = "";
+        string billClass = "";
+        string quickBooksFileName = "";
         string xlPathName = "";
         string xlFile = "";
         string pdfPathName = "";
@@ -103,6 +99,7 @@ namespace InvoiceImport
         string destPathName = "";
         string logFile = "InvoiceImport.log";
         string logPathName = "";
+        string settingsFile = "";
 
         #endregion
 
@@ -114,7 +111,7 @@ namespace InvoiceImport
             set
             {
                 _status = value;
-                txtStatus.Text = value;
+                txtStatus.Text = value.Replace("\n", "\r\n");
             }
             get { return _status; }
         }
@@ -125,6 +122,30 @@ namespace InvoiceImport
 
         private void frmImport_Load(object sender, EventArgs e)
         {
+            // get settings
+            try
+            {
+                settingsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Settings.xml");
+                XmlDocument doc = new XmlDocument();
+                doc.Load(settingsFile);
+                sourcePath = GetSetting(doc, "SourceFolder");
+                archivePath = GetSetting(doc, "ArchiveFolder");
+                errorPath = GetSetting(doc, "ErrorFolder");
+                logPath = GetSetting(doc, "LogFolder");
+                pdfDestPath = GetSetting(doc, "PdfFolder");
+                apAcct = GetSetting(doc, "APAcct");
+                billClass = GetSetting(doc, "BillClass");
+                quickBooksFileName = GetSetting(doc, "QuickBooksFile");
+                bool isOk = bool.TryParse(GetSetting(doc, "ShowExcel"), out showExcel);
+                doc = null;
+            }
+            catch(Exception ex)
+            {
+                string msg = $"Could not read settings from \"{settingsFile}\": {ex.Message}";
+                LogIt.LogError(msg);
+                MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                Application.Exit();
+            }
 
             // set tooltips
             toolTip1.AutoPopDelay = 5000;
@@ -204,368 +225,502 @@ namespace InvoiceImport
 
         private void btnImport_Click(object sender, EventArgs e)
         {
-            if(((Button)sender).Name == "btnImportStandard")
-                importType = importTypes.standard;
-            else
-                importType = importTypes.stock;
+            //if(((Button)sender).Name == "btnImportStandard")
+            //    importType = importTypes.standard;
+            //else
+            //    importType = importTypes.stock;
 
-            var addToAimm = ckAddToAIMM.Checked;
-            var addToQB = ckAddToQB.Checked;
-            string msg = "";
-
-            // continue if we can open excel file
             xlPathName = txtExcelFile.Text;
-            if(open_excel(xlPathName))
+            xlFile = Path.GetFileName(xlPathName);
+            string msg = "";
+            bool needValidJobId = false;
+            bool needValidWO = false;
+            bool needCustInJobId = false;
+
+            bool addToAimmWo = ckAddToAIMM.Checked;
+            bool addToQB = ckAddToQB.Checked;
+            bool addToAimmFees = false;
+            bool deferQbEntry = false;
+
+            if(addToAimmWo | addToQB)
             {
-
-                // setup connection to quickbooks, continue if connected
-                var qb = new QuickBooks.QuickBooks();
-                qb.StatusChanged += qb_StatusChanged;
-                if(qb.Connect())
+                if(xlPathName.Trim() != "")
                 {
-
-                    var billList = new List<BillData>();
-                    var xlFile = Path.GetFileName(xlPathName);
-                    try
+                    // continue if we can open excel file
+                    if(open_excel(xlPathName))
                     {
-                        allValid = true;
-
-                        // loop thru each invoice row on worksheet
-                        foreach(dynamic xlRow in oXl.Range.Rows)
+                        // get and resize range
+                        isValid = oXl.GetRange("invoices");
+                        if(isValid)
                         {
-                            isValid = true;
-                            var billData = new BillData();
-                            DateTime invDate = new DateTime();
-                            int jobID = 0;
-                            string woNo = "";
-                            Single invAmt = 0;
-                            string jobWO = "";
-                            int vendorID = 0;
-                            billData.APAccount = apAcct;
-                            billData.ClassRef = billClass;
+                            msg = "Identified active invoices range";
+                            Status = msg;
+                            LogIt.LogInfo(msg);
 
-                            // get first few items for the invoice
-                            string vendor = (xlRow.Cells[cols.vendor].Value ?? "").ToString().Trim();
-
-                            xlCell = xlRow.Cells[cols.invNum];
-                            string invNo = (xlCell.Value ?? "").ToString().Trim();
-
-                            // if blank items, we're done
-                            if(vendor == "" & invNo == "")
-                                break;
-
-                            // validate invoice number has value
-                            if(invNo != "")
+                            // setup connection to quickbooks if needed, continue if connected
+                            bool qbConnectedOrNotNeeded = false;
+                            if(!addToQB)
+                                qbConnectedOrNotNeeded = true;
+                            else
                             {
-                                billData.InvoiceNumber = invNo;
-                                msg = $"Got invoice {invNo} for vendor {vendor}";
-                                Status = msg;
-                                LogIt.LogInfo(msg);
+                                qb = new QuickBooks.QuickBooks();
+                                qb.StatusChanged += qb_StatusChanged;
+                                qbConnectedOrNotNeeded = qb.Connect(quickBooksFileName);
+                            }
+                            if(qbConnectedOrNotNeeded)
+                            {
 
-                                string invDesc = (xlRow.Cells[cols.invDesc].Value ?? "").ToString().Trim();
-                                if(invDesc == "0")
-                                    invDesc = "";
-
-                                // validate vendor full name has value
-                                xlCell = xlRow.Cells[cols.fullName];
-                                var vfn = (xlCell.Value ?? "").ToString().Trim();
-                                if(vfn == "0")
-                                    vfn = "";
-                                if(vfn != "")
+                                var billList = new List<BillData>();
+                                try
                                 {
-                                    billData.VendorFullName = vfn;
+                                    allValid = true;
 
-                                    // validate invoice date is date
-                                    // try both date number and string date conversion just in case
-                                    xlCell = xlRow.Cells[cols.invDate];
-                                    try
+                                    // loop thru each invoice row on worksheet
+                                    foreach(dynamic xlRow in oXl.Range.Rows)
                                     {
-                                        // using value2 for date because it returns excel OA date
-                                        invDate = DateTime.FromOADate(xlCell.Value2);
-                                        isValid = true;
-                                    }
-                                    catch(Exception)
-                                    {
-                                        isValid = DateTime.TryParse(xlCell.Value, out invDate);
-                                    }
+                                        isValid = false;
+                                        var billData = new BillData();
+                                        DateTime invDate = new DateTime();
+                                        int jobID = 0;
+                                        string woNo = "";
+                                        Single invAmt = 0;
+                                        string jobWO = "";
+                                        int vendorID = 0;
+                                        billData.APAccount = apAcct;
+                                        billData.ClassRef = billClass;
 
-                                    if(isValid)
-                                    {
-                                        billData.InvoiceDate = invDate;
+                                        // get first few items for the invoice
+                                        string vendor = (xlRow.Cells[cols.vendor].Value ?? "").ToString().Trim();
 
-                                        // validate jobID is int
-                                        xlCell = xlRow.Cells[cols.jobID];
-                                        var jid = (xlCell.Value ?? "").ToString().Trim();
-                                        if(int.TryParse(jid, out jobID))
+                                        xlCell = xlRow.Cells[cols.invNum];
+                                        string invNo = (xlCell.Value ?? "").ToString().Trim();
+
+                                        // if blank items, we're done
+                                        if(vendor == "" & invNo == "")
+                                            break;
+
+                                        // validate invoice number has value
+                                        if(invNo != "")
                                         {
-                                            var jobStatus = (int)get_job_status(jobID, connString);
-                                            if(jobStatus != -1)
-                                            {
-                                                // validate WO belongs to job
-                                                xlCell = xlRow.Cells[cols.woNum];
-                                                woNo = (xlCell.Value ?? "").ToString().Trim().ToUpper();
-                                                isValid = valid_work_order(jobID, woNo, connString);
-                                                if(isValid)
-                                                {
-                                                    // validate invAmt is numeric
-                                                    xlCell = xlRow.Cells[cols.invAmt];
-                                                    if(Single.TryParse((xlCell.Value ?? "").ToString().Trim(), out invAmt))
-                                                    {
-                                                        billData.InvoiceAmount = invAmt;
+                                            billData.InvoiceNumber = invNo;
+                                            msg = $"Got invoice {invNo} for vendor {vendor}";
+                                            Status = msg;
+                                            LogIt.LogInfo(msg);
 
-                                                        // validate vendor id
-                                                        xlCell = xlRow.Cells[cols.vendorID];
-                                                        string vid = (xlCell.Value ?? "").ToString().Trim();
-                                                        if(vid != "0" && int.TryParse(vid, out vendorID))
+                                            // get the invoice type (as of 10/24/17, Vendor, Stock Out, Internal, Stock In/Svcs)
+                                            // Vendor:          Goes into AIMM and QuickBooks; Requires valid JobID, Work Order; PDFs are split
+                                            // Stock Out:       Goes into AIMM and QuickBooks (defer QB to end); Requires valid JobID, Work Order; NO PDFs split
+                                            // Internal:        Goes into AIMM (as fee) and QuickBooks; Requires valid JobID, no Work Order; PDFs are split
+                                            // Stock In/Svcs:   Goes into QuickBooks; Requires valid QB customer in JobID column; PDFs are split
+                                            string invType = (xlRow.Cells[cols.invType].Value ?? "").ToString().Trim();
+                                            switch(invType)
+                                            {
+                                                case "Vendor":
+                                                    addToAimmWo = true;
+                                                    addToAimmFees = false;
+                                                    needValidJobId = true;
+                                                    needValidWO = true;
+                                                    needCustInJobId = false;
+                                                    deferQbEntry = false;
+                                                    break;
+                                                case "Stock Out":
+                                                    addToAimmWo = true;
+                                                    addToAimmFees = false;
+                                                    needValidJobId = true;
+                                                    needValidWO = true;
+                                                    needCustInJobId = false;
+                                                    deferQbEntry = true;
+                                                    break;
+                                                case "Internal":
+                                                    addToAimmWo = false;
+                                                    addToAimmFees = true;
+                                                    needValidJobId = true;
+                                                    needValidWO = false;
+                                                    needCustInJobId = false;
+                                                    deferQbEntry = false;
+                                                    break;
+                                                case "Stock In/Svcs":
+                                                    addToAimmWo = false;
+                                                    addToAimmFees = false;
+                                                    needValidJobId = false;
+                                                    needValidWO = false;
+                                                    needCustInJobId = true;
+                                                    deferQbEntry = false;
+                                                    break;
+
+                                                default:
+                                                    break;
+                                            }
+
+                                            // override above choices if checkbox is uncheccked
+                                            addToAimmWo = addToAimmWo && ckAddToAIMM.Checked;
+                                            addToAimmFees = addToAimmFees && ckAddToAIMM.Checked;
+
+                                            string invDesc = (xlRow.Cells[cols.invDesc].Value ?? "").ToString().Trim();
+                                            if(invDesc == "0")
+                                                invDesc = "";
+
+                                            // validate vendor full name has value
+                                            xlCell = xlRow.Cells[cols.fullName];
+                                            bool vendorFullNameValidOrNotNeeded = false;
+                                            string vfn = "";
+                                            if(!addToQB)
+                                                vendorFullNameValidOrNotNeeded = true;
+                                            else
+                                            {
+                                                vfn = (xlCell.Value ?? "").ToString().Trim();
+                                                if(vfn == "0")
+                                                    vfn = "";
+                                                vendorFullNameValidOrNotNeeded = vfn != "";
+                                            }
+                                            if(vendorFullNameValidOrNotNeeded)
+                                            {
+                                                billData.VendorFullName = vfn;
+
+                                                // validate invoice date is date
+                                                // try both date number and string date conversion just in case
+                                                xlCell = xlRow.Cells[cols.invDate];
+                                                bool isValidDate = false;
+                                                try
+                                                {
+                                                    // using value2 for date because it returns excel OA date
+                                                    invDate = DateTime.FromOADate(xlCell.Value2);
+                                                    isValidDate = true;
+                                                }
+                                                catch(Exception)
+                                                {
+                                                    isValidDate = DateTime.TryParse(xlCell.Value, out invDate);
+                                                }
+
+                                                if(isValidDate)
+                                                {
+                                                    billData.InvoiceDate = invDate;
+
+                                                    // validate jobID is int
+                                                    xlCell = xlRow.Cells[cols.jobID];
+                                                    string jid = (xlCell.Value ?? "").ToString().Trim();
+
+                                                    //// can skip AIMM Job/WO/Customer validation IF:
+                                                    ////  addToAIMM checkbox is OFF
+                                                    ////  PO Number/Job ID is "Stock"
+                                                    //bool skipAimmValidation = (!addToAimm && jid.ToLower() == "stock");
+
+                                                    if(!needValidJobId || int.TryParse(jid, out jobID))
+                                                    {
+                                                        int jobStatus = 0;
+                                                        bool isValidJobID = false;
+                                                        if(needValidJobId)
+                                                            jobStatus = (int)get_job_status(jobID, connString);
+                                                        else
+                                                        {
+                                                            if(needCustInJobId && jid == "")
+                                                                jobStatus = -1;
+                                                        }
+                                                        isValidJobID = (jobStatus != -1);
+                                                        if(isValidJobID)
                                                         {
 
-                                                            // validate customer
-                                                            string jobCust = (string)get_job_customer(jobID, connString);
-                                                            if(jobCust != "")
+                                                            // validate WO belongs to job
+                                                            xlCell = xlRow.Cells[cols.woNum];
+                                                            woNo = (xlCell.Value ?? "").ToString().Trim().ToUpper();
+                                                            if(!needValidWO || valid_work_order(jobID, woNo, connString))
                                                             {
-                                                                billData.Customer = jobCust;
-
-                                                                // validate customer in QB if needed
-                                                                bool QbOk = true;
-                                                                if(addToQB)
-                                                                    QbOk = qb.IsQbCustomer(billData);
-
-                                                                if(QbOk)
+                                                                // validate invAmt is numeric
+                                                                xlCell = xlRow.Cells[cols.invAmt];
+                                                                if(Single.TryParse((xlCell.Value ?? "").ToString().Trim(), out invAmt))
                                                                 {
-                                                                    // validate expense acct is present
-                                                                    var expAcct = "";
-                                                                    xlCell = xlRow.Cells[cols.expAcct];
-                                                                    expAcct = (xlCell.Value ?? "").ToString().Trim();
-                                                                    if(expAcct == "0")
-                                                                        expAcct = "";
-                                                                    if(expAcct != "")
+                                                                    billData.InvoiceAmount = invAmt;
+
+                                                                    // validate vendor id
+                                                                    bool vendorIdValidOrNotNeeded = false;
+                                                                    if(!addToAimmWo)
+                                                                        vendorIdValidOrNotNeeded = true;
+                                                                    else
                                                                     {
-                                                                        billData.ExpenseAcct = expAcct;
+                                                                        xlCell = xlRow.Cells[cols.vendorID];
+                                                                        string vid = (xlCell.Value ?? "").ToString().Trim();
+                                                                        vendorIdValidOrNotNeeded = vid != "0" && int.TryParse(vid, out vendorID);
+                                                                    }
+                                                                    if(vendorIdValidOrNotNeeded)
+                                                                    {
+                                                                        // validate customer if not skipping AIMM validation
+                                                                        string jobCust = "";
+                                                                        if(needCustInJobId)
+                                                                            jobCust = jid;
+                                                                        else
+                                                                            jobCust = get_job_customer(jobID, connString);
 
-                                                                        // add invoice to aimm, get jobWO if successful
-                                                                        if(addToAimm)
+                                                                        if(jobCust != "")
                                                                         {
-                                                                            jobWO = add_invoice_to_job(jobID, woNo, vendorID, invNo, invAmt, invDesc, connString);
-                                                                            isValid = (jobWO.Length != 0);
-                                                                            if(isValid)
-                                                                            {
-                                                                                msg = $"Added invoice {invNo} for vendor {vendor} to job {jobWO}";
-                                                                                Status = msg;
-                                                                                LogIt.LogInfo(msg);
-                                                                            }
-                                                                            else
-                                                                            {
-                                                                                (xlRow.Cells[cols.invNum]).Interior.ColorIndex = 3;
-                                                                                LogIt.LogError($"Couldn't add invoice {invNo} for vendor {vendor} to job ID {jobWO}");
-                                                                                set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
-                                                                            } // added aimm invoice
+                                                                            billData.Customer = jobCust;
 
-                                                                        }
+                                                                            // validate customer in QB if needed
+                                                                            bool isQbCustOrNotAddingToQb = true;
+                                                                            if(addToQB)
+                                                                                isQbCustOrNotAddingToQb = qb.IsQbCustomer(billData);
 
-                                                                        // add qb vendor bill if standard, else save for later
-                                                                        if(addToQB)
-                                                                        {
-                                                                            if(importType == importTypes.standard)
+                                                                            if(isQbCustOrNotAddingToQb)
                                                                             {
-                                                                                qbValid = qb.AddStandardVendorBill(billData);
-                                                                                if(qbValid)
+                                                                                // validate expense acct is present if needed
+                                                                                bool expAcctValidOrNotNeeded = false;
+                                                                                string expAcct = "";
+                                                                                if(!addToQB)
+                                                                                    expAcctValidOrNotNeeded = true;
+                                                                                else
                                                                                 {
-                                                                                    msg = $"Added invoice {invNo} for vendor {vendor} to QuickBooks";
-                                                                                    Status = msg;
-                                                                                    LogIt.LogInfo(msg);
+                                                                                    xlCell = xlRow.Cells[cols.expAcct];
+                                                                                    expAcct = (xlCell.Value ?? "").ToString().Trim();
+                                                                                    if(expAcct == "0")
+                                                                                        expAcct = "";
+                                                                                    expAcctValidOrNotNeeded = expAcct != "";
+                                                                                }
+                                                                                if(expAcctValidOrNotNeeded)
+                                                                                {
+                                                                                    billData.ExpenseAcct = expAcct;
+
+                                                                                    // add invoice to aimm, get jobWO if successful
+                                                                                    if(addToAimmWo)
+                                                                                    {
+                                                                                        jobWO = add_invoice_to_job(xlRow, jobID, woNo, vendorID, invNo, invAmt, invDesc, connString);
+                                                                                        isValid = jobWO != "";
+                                                                                    }
+                                                                                    else if(addToAimmFees)
+                                                                                    {
+                                                                                        float totalInternalFees = add_invoice_to_internal_fees(xlRow, jobID, vendor, invNo, invAmt, invDesc, connString);
+                                                                                        isValid = totalInternalFees != 0;
+                                                                                        if(isValid)
+                                                                                            isValid = update_job_internal_fees(xlRow, jobID, totalInternalFees, connString);
+                                                                                    }
+                                                                                    else
+                                                                                        isValid = true;
+
+                                                                                    // add qb vendor bill if needed
+                                                                                    if(addToQB)
+                                                                                    {
+                                                                                        // if deferring QB entry, save detail for later. otherwise enter now
+                                                                                        if(deferQbEntry)
+                                                                                        {
+                                                                                            billList.Add(billData);
+                                                                                            qbValid = true;
+                                                                                        }
+                                                                                        else
+                                                                                        {
+                                                                                            qbValid = add_quickbooks_bill(xlRow, billData);
+                                                                                        }
+                                                                                    }
+                                                                                    else
+                                                                                        qbValid = true;
                                                                                 }
                                                                                 else
                                                                                 {
                                                                                     xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
-                                                                                    msg = $"Couldn't add invoice {invNo} for vendor {vendor} to QuickBooks: {billData.QBMessage}";
-                                                                                    Status = msg;
+                                                                                    msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing expense account";
                                                                                     LogIt.LogError(msg);
-                                                                                    set_excel_status(xlRow, billData.QBStatus, billData.QBMessage);
-                                                                                }
+                                                                                    isValid = false;
+                                                                                    set_excel_status(xlRow, "Error", "Missing expense account");
+                                                                                } // valid expense account
+
                                                                             }
                                                                             else
                                                                             {
-                                                                                billList.Add(billData);
-                                                                                qbValid = true;
+                                                                                isValid = false;
+                                                                                xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
+                                                                                msg = $"Error getting QuickBooks customer, invoice: {invNo}, vendor: {vendor}: {billData.QBMessage}";
+                                                                                Status = msg;
+                                                                                LogIt.LogError(msg);
+                                                                                set_excel_status(xlRow, billData.QBStatus, billData.QBMessage);
                                                                             }
+
                                                                         }
+                                                                        else
+                                                                        {
+                                                                            (xlRow.Cells[cols.invNum]).Interior.ColorIndex = 3;
+                                                                            msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has missing customer";
+                                                                            LogIt.LogError(msg);
+                                                                            isValid = false;
+                                                                            set_excel_status(xlRow, "Error", "Missing customer");
+                                                                        } // valid customer
 
                                                                     }
                                                                     else
                                                                     {
-                                                                        xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
-                                                                        msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing expense account";
-                                                                        LogIt.LogError(msg);
                                                                         isValid = false;
-                                                                        set_excel_status(xlRow, "Error", "Missing expense account");
-                                                                    } // valid expense account
+                                                                        xlCell.Interior.ColorIndex = 3;
+                                                                        LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad vendor ID: {(xlCell.Value ?? "")}");
+                                                                        set_excel_status(xlRow, "Error", "Bad vendor ID");
+                                                                    } // vendor ID is numeric
 
                                                                 }
+
                                                                 else
                                                                 {
                                                                     isValid = false;
-                                                                    xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
-                                                                    msg = $"Error getting QuickBooks customer, invoice: {invNo}, vendor: {vendor}: {billData.QBMessage}";
-                                                                    Status = msg;
-                                                                    LogIt.LogError(msg);
-                                                                    set_excel_status(xlRow, billData.QBStatus, billData.QBMessage);
-                                                                }
+                                                                    xlCell.Interior.ColorIndex = 3;
+                                                                    LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad invoice amount: {(xlCell.Value ?? "")}");
+                                                                    set_excel_status(xlRow, "Error", "Invalid invoice amount");
+                                                                } // inv amt is numeric
 
                                                             }
                                                             else
                                                             {
-                                                                (xlRow.Cells[cols.invNum]).Interior.ColorIndex = 3;
-                                                                msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has missing customer";
-                                                                LogIt.LogError(msg);
-                                                                isValid = false;
-                                                                set_excel_status(xlRow, "Error", "Missing customer");
-                                                            } // valid customer
+                                                                xlCell.Interior.ColorIndex = 3;
+                                                                LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has invalid work order number: {woNo}");
+                                                                set_excel_status(xlRow, "Error", "Invalid work order number");
+                                                            } // WO belongs to job
 
                                                         }
                                                         else
                                                         {
                                                             isValid = false;
                                                             xlCell.Interior.ColorIndex = 3;
-                                                            LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad vendor ID: {(xlCell.Value ?? "")}");
-                                                            set_excel_status(xlRow, "Error", "Bad vendor ID");
-                                                        } // vendor ID is numeric
+                                                            if(needValidJobId)
+                                                                msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\", job ID \"{jobID}\" is closed, cancelled or missing from database";
+                                                            else if(needCustInJobId)
+                                                                msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing customer name";
 
+                                                            LogIt.LogError(msg);
+
+                                                            if(needValidJobId)
+                                                                msg = "Job closed, cancelled or not found in database";
+                                                            else if(needCustInJobId)
+                                                                msg = "Invoice missing customer name";
+
+                                                            set_excel_status(xlRow, "Error", msg);
+                                                        } // valid job status
                                                     }
-
                                                     else
                                                     {
                                                         isValid = false;
                                                         xlCell.Interior.ColorIndex = 3;
-                                                        LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad invoice amount: {(xlCell.Value ?? "")}");
-                                                        set_excel_status(xlRow, "Error", "Invalid invoice amount");
-                                                    } // inv amt is numeric
+                                                        LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad JobID: {(xlCell.Value ?? "").ToString()}");
+                                                        set_excel_status(xlRow, "Error", "Bad job ID");
+                                                    } // valid job id
 
                                                 }
                                                 else
                                                 {
+                                                    isValid = false;
+                                                    msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad date: {invDate}";
                                                     xlCell.Interior.ColorIndex = 3;
-                                                    LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has invalid work order number: {woNo}");
-                                                    set_excel_status(xlRow, "Error", "Invalid work order number");
-                                                } // WO belongs to job
+                                                    set_excel_status(xlRow, "Error", "Bad invoice date");
+                                                    LogIt.LogError(msg);
+                                                } // valid date
 
                                             }
                                             else
                                             {
                                                 isValid = false;
-                                                xlCell.Interior.ColorIndex = 3;
-                                                LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\", job ID \"{jobID}\" is closed, cancelled or missing from database");
-                                                set_excel_status(xlRow, "Error", "Job closed, cancelled or not found in database");
-                                            } // valid job status
+                                                msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing full name";
+                                                xlRow.Cells[cols.vendor].Interior.ColorIndex = 3;
+                                                set_excel_status(xlRow, "Error", "Missing vendor full name");
+                                                LogIt.LogError(msg);
+
+                                            } // has vendor full name
                                         }
                                         else
                                         {
                                             isValid = false;
+                                            msg = $"Invoice number missing for vendor \"{vendor}\" in file \"{xlFile}\"";
                                             xlCell.Interior.ColorIndex = 3;
-                                            LogIt.LogError($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad JobID: {(xlCell.Value ?? "").ToString()}");
-                                            set_excel_status(xlRow, "Error", "Bad job ID");
-                                        } // valid job id
+                                            set_excel_status(xlRow, "Error", "Missing invoice number");
+                                            LogIt.LogError(msg);
+                                        } // has invoice number
 
+                                        // keep track if all items were valid
+                                        allValid = allValid && isValid && qbValid;
                                     }
-                                    else
-                                    {
-                                        isValid = false;
-                                        msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad date: {invDate}";
-                                        xlCell.Interior.ColorIndex = 3;
-                                        set_excel_status(xlRow, "Error", "Bad invoice date");
-                                        LogIt.LogError(msg);
-                                    } // valid date
 
+                                    // post any Stock Out invoices to quickbooks
+                                    if(addToQB && billList.Count > 0)
+                                    {
+                                        Status = "Now importing all stock out vendor bills to QuickBooks. Please wait...";
+                                        Cursor = Cursors.WaitCursor;
+                                        qbValid = qb.AddStockVendorBills(billList);
+                                        Cursor = Cursors.Default;
+                                    }
+
+                                    allValid = allValid && qbValid;
+
+                                }
+                                catch(Exception ex)
+                                {
+                                    msg = $"Error processing Excel file \"{xlFile}\", some invoices not imported: {ex.Message}";
+                                    LogIt.LogError(msg);
+                                    MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                                    Status = msg;
+                                }
+
+                            }
+                            else
+                            {
+                                msg = "Could not connect to QuickBooks";
+                                LogIt.LogError(msg);
+                                MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                                Status = msg;
+                                qb = null;
+                            } // connected to quickbooks
+                            qb = null;
+
+                            // close excel file, save if any invalid items.
+                            var isOk = oXl.CloseWorkbook(!allValid);
+
+                            // move workbook to archive/errors folder
+                            destPath = allValid ? archivePath : errorPath;
+                            destFile = string.Concat(
+                                Path.GetFileNameWithoutExtension(xlFile),
+                                DateTime.Now.ToString("_yyyy-MM-dd_HH-mm-ss"),
+                                Path.GetExtension(xlFile));
+                            destPathName = Path.Combine(destPath, destFile);
+                            if(move_file(xlPathName, destPathName))
+                            {
+                                txtExcelFile.Text = destPathName;
+                                if(allValid)
+                                {
+                                    msg = $"Import completed without errors. Moved \"{xlFile}\" to \"{destPathName}\"";
+                                    LogIt.LogInfo(msg);
                                 }
                                 else
                                 {
-                                    isValid = false;
-                                    msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing full name";
-                                    xlRow.Cells[cols.vendor].Interior.ColorIndex = 3;
-                                    set_excel_status(xlRow, "Error", "Missing vendor full name");
-                                    LogIt.LogError(msg);
-
-                                } // has vendor full name
+                                    msg = $"Import completed with errors. Moved \"{xlFile}\" to \"{destPathName}\"";
+                                    LogIt.LogWarn(msg);
+                                }
+                                Status = msg;
                             }
-                            else
-                            {
-                                isValid = false;
-                                msg = $"Invoice number missing for vendor \"{vendor}\" in file \"{xlFile}\"";
-                                xlCell.Interior.ColorIndex = 3;
-                                set_excel_status(xlRow, "Error", "Missing invoice number");
-                                LogIt.LogError(msg);
-                            } // has invoice number
 
-                            // keep track if all items were valid
-                            allValid = allValid && isValid && qbValid;
                         }
-
-                        // post all bills to quickbooks if stock invoices
-                        if(addToQB && importType == importTypes.stock)
-                            qbValid = qb.AddStockVendorBills(billList);
-
-                        allValid = allValid && qbValid;
-
-                        // save excel file if any invalid items.
-                        var isOk = oXl.CloseWorkbook(!allValid);
-
-                        // move workbook to archive/errors folder
-                        destPath = allValid ? archivePath : errorPath;
-                        destFile = string.Concat(
-                            Path.GetFileNameWithoutExtension(xlFile),
-                            DateTime.Now.ToString("_yyyy-MM-dd_HH-mm-ss"),
-                            Path.GetExtension(xlFile));
-                        destPathName = Path.Combine(destPath, destFile);
-                        if(move_file(xlPathName, destPathName))
+                        else
                         {
-                            txtExcelFile.Text = destPathName;
-                            if(allValid)
-                            {
-                                msg = $"Moved \"{xlFile}\" to \"{destPathName}\"";
-                                LogIt.LogInfo(msg);
-                            }
-                            else
-                            {
-                                msg = $"File \"{xlFile}\" had errors. Moved it to \"{destPathName}\"";
-                                LogIt.LogWarn(msg);
-                            }
+                            msg = "Could not identify active invoices range, invoices not imported.";
                             Status = msg;
-                        }
+                            LogIt.LogError(msg);
+                        } // got active invoices
+
+                        oXl.CloseExcel();
+                        oXl = null;
                     }
-                    catch(Exception ex)
+                    else
                     {
-                        msg = $"Error processing Excel file \"{xlFile}\": {ex.Message}";
+                        msg = $"Could not open Excel file \"{xlPathName}\", invoices not imported";
                         LogIt.LogError(msg);
-                        MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                         Status = msg;
-                    }
+                    } // opened excel file
 
                 }
                 else
                 {
-                    msg = "Could not connect to QuickBooks";
-                    LogIt.LogError(msg);
-                    MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                    Status = msg;
-                    qb = null;
-                } // connected to quickbooks
-                qb = null;
-
-                oXl.CloseExcel();
-                oXl = null;
+                    Status = "You must enter an Excel file name to process.";
+                }
             }
             else
             {
-                msg = $"Could not find Excel file \"{xlPathName}\"";
-                LogIt.LogError(msg);
-                MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                Status = msg;
-            } // opened excel file
-
+                Status = "You must choose \"Add Invoices to AIMM\" or \"Add Invoices to QuickBooks\".\nFile NOT processed.";
+            }
         }
 
         private void btnSplitPDF_Click(object sender, EventArgs e)
         {
             pdfPathName = txtPDFFile.Text;
+            string msg = "";
             if(File.Exists(pdfPathName))
             {
                 pdfFile = Path.GetFileName(pdfPathName);
@@ -577,13 +732,16 @@ namespace InvoiceImport
                 // if dest folder exists delete contents, otherwise create
                 if(Directory.Exists(pdfDestPath))
                 {
-                    var msg = $"Directory {pdfDestPath} already exists.\nOK to delete any PDF files?";
-                    if(MessageBox.Show(msg, "Delete Files?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
+                    msg = $"Directory {pdfDestPath} already exists.\nOK to delete any PDF files?";
+                    var result = MessageBox.Show(msg, "Delete Files?", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button3);
+                    if(result == DialogResult.Cancel)
                         return;
-
-                    foreach(var file in Directory.GetFiles(pdfDestPath, "*.pdf", SearchOption.TopDirectoryOnly))
+                    else if(result == DialogResult.Yes)
                     {
-                        File.Delete(file);
+                        foreach(var file in Directory.GetFiles(pdfDestPath, "*.pdf", SearchOption.TopDirectoryOnly))
+                        {
+                            File.Delete(file);
+                        }
                     }
                 }
                 else
@@ -591,276 +749,109 @@ namespace InvoiceImport
                     Directory.CreateDirectory(pdfDestPath);
                 }
 
-                // get list of invoice numbers from xl document.
-                xlPathName = txtExcelFile.Text;
-                var xlFile = Path.GetFileName(xlPathName);
-                if(open_excel(xlPathName))
+                if(xlPathName.Trim() != "")
                 {
-                    var invoiceList = new List<string>();
-                    try
+                    // get list of invoice numbers from xl document.
+                    xlPathName = txtExcelFile.Text;
+                    var xlFile = Path.GetFileName(xlPathName);
+                    if(open_excel(xlPathName))
                     {
-                        // loop thru each invoice row on worksheet, collect invoice numbers
-                        foreach(Excel.Range xlRow in xlRange.Rows)
+                        // get and resize range
+                        isValid = oXl.GetRange("invoices");
+                        if(isValid)
                         {
-                            xlCell = (Excel.Range)xlRow.Cells[cols.vendor];
-                            string vendor = (xlCell.Value2 ?? "").ToString();
-                            xlCell = (Excel.Range)xlRow.Cells[cols.invNum];
-                            string invNo = (xlCell.Value2 ?? "").ToString();
-                            if(vendor == "" || invNo == "")
-                                break;
-                            invoiceList.Add($"{vendor}_Invoice_{invNo}");
+                            msg = "Identified active invoices range";
+                            Status = msg;
+                            LogIt.LogInfo(msg);
+
+                            var invoiceList = new List<string>();
+                            try
+                            {
+                                // loop thru each invoice row on worksheet, collect invoice numbers
+                                foreach(dynamic xlRow in oXl.Range.Rows)
+                                {
+                                    string vendor = (xlRow.Cells[cols.vendor].Value ?? "").ToString().Trim();
+                                    string invNo = (xlRow.Cells[cols.invNum].Value ?? "").ToString().Trim();
+                                    if(vendor == "" || invNo == "")
+                                        break;
+
+                                    // get the invoice type (as of 10/24/17, Vendor, Stock Out, Internal, Stock In/Svcs)
+                                    // Vendor:          Goes into AIMM and QuickBooks; Requires valid JobID, Work Order; PDFs are split
+                                    // Stock Out:       Goes into AIMM and QuickBooks; Requires valid JobID, Work Order; NO PDFs split
+                                    // Internal:        Goes into AIMM (as fee) and QuickBooks; Requires valid JobID, no Work Order; PDFs are split
+                                    // Stock In/Svcs:   Goes into QuickBooks; Requires valid QB customer in JobID column; PDFs are split
+                                    string invType = (xlRow.Cells[cols.invType].Value ?? "").ToString().Trim();
+                                    if(invType != "Stock Out")
+                                        invoiceList.Add($"{vendor}_Invoice_{invNo}");
+                                }
+                                var isOk = oXl.CloseWorkbook();
+                            }
+                            catch(Exception ex)
+                            {
+                                msg = $"Error processing Excel file \"{xlFile}\": {ex.Message}";
+                                Status = msg;
+                                MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+
+                                LogIt.LogError(msg);
+                                return;
+                            }
+
+                            var isOK = split_pdfs(pdfPathName, pdfDestPath, invoiceList);
+
+                            // move original PDF to archive folder
+                            if(isOK)
+                            {
+                                msg = "Split PDFs";
+                                Status = msg;
+                                LogIt.LogInfo(msg);
+                                destPath = archivePath;
+                                destFile = string.Concat(
+                                    Path.GetFileNameWithoutExtension(pdfFile),
+                                    DateTime.Now.ToString("_yyyy-MM-dd_HH-mm-ss"),
+                                    Path.GetExtension(pdfFile));
+                                destPathName = Path.Combine(destPath, destFile);
+                                if(move_file(pdfPathName, destPathName))
+                                {
+                                    txtPDFFile.Text = destPathName;
+                                    msg = $"Moved \"{pdfFile}\" to \"{destPathName}\"";
+                                    Status = msg;
+                                    LogIt.LogInfo(msg);
+                                }
+                            }
                         }
-                        var isOk = close_excel();
+                        else
+                        {
+                            msg = "Could not identify active invoices range, invoices not imported.";
+                            Status = msg;
+                            LogIt.LogError(msg);
+                        } // got active invoices
+
+                        oXl.CloseExcel();
+                        oXl = null;
                     }
-                    catch(Exception ex)
+                    else
                     {
-                        var msg = $"Error processing Excel file \"{xlFile}\": {ex.Message}";
+                        msg = $"Could not find or open Excel file \"{xlFile}\"";
+                        Status = msg;
+                        LogIt.LogWarn(msg);
                         MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                        LogIt.LogError(msg);
-                        return;
                     }
 
-                    var isOK = split_pdfs(pdfPathName, pdfDestPath, invoiceList);
-
-                    // move original PDF to archive folder
-                    if(isOK)
-                    {
-                        destPath = archivePath;
-                        destFile = string.Concat(
-                            Path.GetFileNameWithoutExtension(pdfFile),
-                            DateTime.Now.ToString("_yyyy-MM-dd_HH-mm-ss"),
-                            Path.GetExtension(pdfFile));
-                        destPathName = Path.Combine(destPath, destFile);
-                        if(move_file(pdfPathName, destPathName))
-                        {
-                            txtPDFFile.Text = destPathName;
-                            LogIt.LogInfo($"Moved \"{pdfFile}\" to \"{destPathName}\"");
-                        }
-                    }
                 }
                 else
                 {
-                    var msg = $"Could not find or open Excel file \"{xlFile}\"";
+                    msg = $"Could not find PDF file \"{pdfPathName}\"";
+                    Status = msg;
+                    LogIt.LogWarn(msg);
                     MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                 }
-
             }
             else
             {
-                var msg = $"Could not find PDF file \"{pdfPathName}\"";
-                MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                Status = "You must enter an Excel file name to process.";
             }
+
         }
-
-        //private void btnQuickBooks_Click(object sender, EventArgs e)
-        //{
-        //    xlPathName = txtExcelFile.Text;
-        //    var xlFile = Path.GetFileName(xlPathName);
-        //    Status = $"Opening Excel file \"{xlFile}\"";
-        //    if(open_excel(xlPathName))
-        //    {
-        //        var billList = new List<BillData>();
-        //        try
-        //        {
-        //            allValid = true;
-
-        //            // loop thru each invoice row on worksheet
-        //            foreach(Excel.Range xlRow in xlRange.Rows)
-        //            {
-        //                isValid = true;
-        //                var billData = new BillData();
-        //                billData.APAccount = apAcct;
-        //                billData.ClassRef = billClass;
-
-        //                // get non-validated data for the invoice
-        //                xlCell = (Excel.Range)xlRow.Cells[cols.vendor];
-        //                string vendor = (xlCell.Value2 ?? "").ToString();
-
-        //                xlCell = (Excel.Range)xlRow.Cells[cols.invNum];
-        //                string invNo = (xlCell.Value2 ?? "").ToString();
-
-        //                // if blank items, we're done
-        //                if(vendor == "" || invNo == "")
-        //                    break;
-
-        //                billData.InvoiceNumber = invNo;
-        //                Status = $"Processing invoice {invNo}";
-
-        //                xlCell = (Excel.Range)xlRow.Cells[cols.fullName];
-        //                billData.VendorFullName = (xlCell.Value2 ?? "").ToString();
-        //                if(billData.VendorFullName == "0")
-        //                    billData.VendorFullName = "";
-
-        //                //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom1];
-        //                //billData.BillFrom1 = (xlCell.Value2 ?? "").ToString();
-        //                //if(billData.BillFrom1 == "0")
-        //                //    billData.BillFrom1 = "";
-
-        //                //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom2];
-        //                //billData.BillFrom2 = (xlCell.Value2 ?? "").ToString();
-        //                //if(billData.BillFrom2 == "0")
-        //                //    billData.BillFrom2 = "";
-
-        //                //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom3];
-        //                //billData.BillFrom3 = (xlCell.Value2 ?? "").ToString();
-        //                //if(billData.BillFrom3 == "0")
-        //                //    billData.BillFrom3 = "";
-
-        //                //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom4];
-        //                //billData.BillFrom4 = (xlCell.Value2 ?? "").ToString();
-        //                //if(billData.BillFrom4 == "0")
-        //                //    billData.BillFrom4 = "";
-
-        //                //xlCell = (Excel.Range)xlRow.Cells[cols.billFrom5];
-        //                //billData.BillFrom5 = (xlCell.Value2 ?? "").ToString();
-        //                //if(billData.BillFrom5 == "0")
-        //                //    billData.BillFrom5 = "";
-
-        //                // get and validate remaining items
-        //                DateTime invDate = new DateTime();
-        //                Single invAmt;
-        //                int jobID;
-        //                string expAcct;
-
-        //                // validate invoice date is date
-        //                // try both date number and string date conversion just in case
-        //                xlCell = (Excel.Range)xlRow.Cells[cols.invDate];
-        //                if(xlCell.Value2 == null)
-        //                    isValid = false;
-        //                else
-        //                {
-        //                    try
-        //                    {
-        //                        invDate = DateTime.FromOADate(xlCell.Value2);
-        //                        isValid = true;
-        //                    }
-        //                    catch(Exception)
-        //                    {
-        //                        isValid = DateTime.TryParse(xlCell.Value2.ToString(), out invDate);
-        //                    }
-
-        //                }
-        //                if(isValid)
-        //                {
-        //                    billData.InvoiceDate = invDate;
-
-        //                    // validate invAmt is numeric
-        //                    xlCell = (Excel.Range)xlRow.Cells[cols.invAmt];
-        //                    if(Single.TryParse(xlCell.Value2.ToString(), out invAmt))
-        //                    {
-        //                        billData.InvoiceAmount = invAmt;
-
-        //                        // validate jobID is numeric
-        //                        xlCell = (Excel.Range)xlRow.Cells[cols.jobID];
-        //                        if(int.TryParse(xlCell.Value2.ToString(), out jobID))
-        //                        {
-        //                            // get customer for job
-        //                            string jobCust = (string)get_job_customer(jobID, connString);
-        //                            if(jobCust == null)
-        //                            {
-        //                                xlCell = (Excel.Range)xlRow.Cells[cols.invNum];
-        //                                xlCell.Interior.ColorIndex = 44;
-        //                                LogIt.LogWarn($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has missing customer");
-        //                                billData.Customer = "";
-        //                                isValid = false;
-        //                            }
-        //                            else
-        //                            {
-        //                                billData.Customer = jobCust;
-        //                                Status = $"Got customer: {jobCust}";
-        //                            } // valid customer
-
-        //                            // validate expense acct is present
-        //                            xlCell = (Excel.Range)xlRow.Cells[cols.expAcct];
-        //                            expAcct = (xlCell.Value2 ?? "").ToString();
-        //                            if(expAcct == "0")
-        //                                expAcct = "";
-        //                            if(expAcct == "")
-        //                            {
-        //                                ((Excel.Range)xlRow.Cells[cols.invAmt]).Interior.ColorIndex = 44;
-        //                                LogIt.LogWarn($"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing expense account");
-        //                                billData.ExpenseAcct = "";
-        //                                isValid = false;
-        //                            }
-        //                            else
-        //                            {
-        //                                billData.ExpenseAcct = expAcct;
-        //                            } // valid expense account
-
-        //                            //// get terms, calculate due date
-        //                            //xlCell = (Excel.Range)xlRow.Cells[cols.terms];
-        //                            //var terms = (xlCell.Value2 ?? "").ToString();
-        //                            //if(terms == "0")
-        //                            //    terms = "";
-        //                            //billData.Terms = terms;
-        //                            //billData.DueDate = get_due_date(vendor, invDate, terms);
-
-        //                            // add the QB invoice
-        //                            billList.Add(billData);
-
-        //                        }
-        //                        else
-        //                        {
-        //                            isValid = false;
-        //                        } // valid job id
-
-        //                    }
-        //                    else
-        //                    {
-        //                        var msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad invoice amount: {xlCell.Value2.ToString()}";
-        //                        ((Excel.Range)xlRow.Cells[cols.invAmt]).Interior.ColorIndex = 3;
-        //                        Status = msg;
-        //                        LogIt.LogError(msg);
-        //                        isValid = false;
-        //                    } // inv amt is numeric
-
-
-        //                }
-        //                else
-        //                {
-        //                    var msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" has bad date: {xlCell.Value2.ToString()}";
-        //                    ((Excel.Range)xlRow.Cells[cols.invDate]).Interior.ColorIndex = 3;
-        //                    Status = msg;
-        //                    LogIt.LogError(msg);
-        //                    isValid = false;
-        //                } // valid date
-
-        //                allValid = allValid && isValid;
-        //                Status = $"Processed invoice # {invNo}";
-        //            }
-
-        //            // post the data to quickbooks
-        //            var qb = new QuickBooks.QuickBooks();
-        //            qb.StatusChanged += qb_StatusChanged;
-
-        //            var isOk = qb.AddStockVendorBills(billList);
-        //            if(isOk)
-        //            {
-        //                // update excel with results
-        //                bool anyErrors = update_excel(billList);
-        //                allValid = allValid && !anyErrors;
-        //            }
-        //            isOk = close_excel(!allValid);
-        //            qb = null;
-
-
-        //        }
-        //        catch(Exception ex)
-        //        {
-        //            var msg = $"Error processing Excel file \"{xlFile}\": {ex.Message}";
-        //            MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-        //            Status = msg;
-        //            LogIt.LogError(msg);
-        //        }
-        //    }
-        //    else
-        //    {
-        //        var msg = $"Could not find Excel file \"{xlPathName}\"";
-        //        Status = msg;
-        //        MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-        //    }
-
-        //}
 
         private void qb_StatusChanged(object sender, StatusChangedEventArgs e)
         {
@@ -870,6 +861,25 @@ namespace InvoiceImport
         #endregion
 
         #region methods
+
+        /// <summary>
+        /// return requested setting from xml settings file
+        /// </summary>
+        /// <param name="doc"><see cref="XmlDocument"/> containing settings</param>
+        /// <param name="settingName">Name of setting to retrieve</param>
+        /// <returns></returns>
+        private string GetSetting(XmlDocument doc, string settingName)
+        {
+            string response = "";
+            try
+            {
+                response = ((XmlElement)doc.SelectSingleNode($"/Settings/setting[@name='{settingName}']")).GetAttribute("value");
+            }
+            catch(Exception)
+            {
+            }
+            return response;
+        }
 
         /// <summary>
         /// split large PDF file into individual page files
@@ -959,46 +969,12 @@ namespace InvoiceImport
                     oXl = new clsExcel();
                     oXl.Visible = showExcel;
                     result = oXl.OpenExcel(xlPathName);
-                    if(result)
-                    {
-                        msg = $"Opened Excel file {xlFile}";
-                        Status = msg;
-                        LogIt.LogInfo(msg);
-
-                        result = oXl.GetRange("invoices");
-                        if(result)
-                        {
-                            msg = "Identified active invoice range";
-                            Status = msg;
-                            LogIt.LogInfo(msg);
-                        }
-                        else
-                        {
-                            msg = "Could not identify active invoice range";
-                            Status = msg;
-                            LogIt.LogError(msg);
-                        }
-                    }
-                    else
-                    {
-                        msg = $"Could not open Excel file \"{xlFile}\"";
-                        Status = msg;
-                        LogIt.LogError(msg);
-                    }
                 }
                 catch(Exception ex)
                 {
                     msg = $"Error opening Excel file \"{xlFile}\": {ex.Message}";
-                    MessageBox.Show(msg, "Error", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Exclamation);
                     LogIt.LogError(msg);
-                    result = false;
                 }
-            }
-            else
-            {
-                msg = $"Could not find Excel file \"{xlFile}\"";
-                LogIt.LogError(msg);
-                result = false;
             }
             return result;
         }
@@ -1017,48 +993,9 @@ namespace InvoiceImport
                 }
                 else
                     row.Cells[cols.message].Value = message;
-                    row.Cells[cols.message].Style.WrapText = true;
-                    row.EntireRow.AutoFit();
+                row.Cells[cols.message].Style.WrapText = true;
+                row.EntireRow.AutoFit();
             }
-        }
-
-        /// <summary>
-        /// update invoices in excel worksheet if errors
-        /// </summary>
-        /// <returns>boolean indicating whether changes were made to worksheet</returns>
-        private bool update_excel(List<BillData> billList)
-        {
-            bool anyErrors = false;
-            bool billError = false;
-            try
-            {
-                foreach(BillData billData in billList)
-                {
-                    var row = billList.IndexOf(billData);
-                    Excel.Range xlRow = xlRange.Rows[row + 1];
-                    var status = billData.QBStatus;
-                    var message = billData.QBMessage;
-                    billError = false;
-                    if(status == "Error")
-                    {
-                        xlCell = (Excel.Range)xlRow.Cells[cols.status];
-                        xlCell.Value2 = status;
-                        xlCell = (Excel.Range)xlRow.Cells[cols.message];
-                        xlCell.Value2 = message;
-                        ((Excel.Range)xlRow.Cells[cols.vendor]).Interior.ColorIndex = 3;
-                        billError = true;
-                    }
-                    anyErrors = anyErrors || billError;
-                }
-
-                return anyErrors;
-            }
-            catch(Exception)
-            {
-                // don't want to save Excel if errors
-                return false;
-            }
-
         }
 
         /// <summary>
@@ -1079,10 +1016,8 @@ namespace InvoiceImport
                 try
                 {
                     oXl.CloseWorkbook(needToSave);
-                    //xlWorkbook.Close(needToSave);
-
                 }
-                catch(COMException ex)
+                catch(COMException)
                 {
                     // ignore if already closed
                 }
@@ -1116,15 +1051,16 @@ namespace InvoiceImport
         /// <summary>
         /// add an invoice to a job / work order
         /// </summary>
-        /// <param name="jobID"></param>
-        /// <param name="woNo"></param>
+        /// <param name="xlRow">Active Excel row being processed</param>
+        /// <param name="jobID">Numeric Job ID</param>
+        /// <param name="woNo">Work Order number</param>
         /// <param name="vendorID"></param>
         /// <param name="invNo"></param>
         /// <param name="invAmt"></param>
         /// <param name="invDesc"></param>
         /// <param name="connectionString"></param>
         /// <returns>string job# + work order # (12345-W01)</returns>
-        private static string add_invoice_to_job(int jobID, string woNo, int vendorID, string invNo, Single invAmt, string invDesc, string connectionString)
+        private string add_invoice_to_job(dynamic xlRow, int jobID, string woNo, int vendorID, string invNo, Single invAmt, string invDesc, string connectionString)
         {
             string projFinalID = jobID.ToString() + "-" + woNo;
             string now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -1136,20 +1072,429 @@ namespace InvoiceImport
             {
                 using(SqlConnection conn = new SqlConnection(connectionString))
                 {
+                    string cmdText = $"INSERT INTO MLG.POL.tblInternalJobFees (JobID, FeeName, FeeAmount, Notes, CreateDate)";
+
                     using(SqlCommand cmd = new SqlCommand(sql, conn))
                     {
                         conn.Open();
                         cmd.ExecuteNonQuery();
+                        var msg = $"Added invoice {invNo} for vendor {vendorID} to AIMM work order \"{projFinalID}\"";
+                        Status = msg;
+                        LogIt.LogInfo(msg);
                         return projFinalID;
                     }
                 }
-
             }
             catch(Exception ex)
             {
                 LogIt.LogError($"Error adding invoice for job {projFinalID}: {ex.Message}");
+                (xlRow.Cells[cols.invNum]).Interior.ColorIndex = 3;
+                LogIt.LogError($"Couldn't add invoice {invNo} for vendor {vendorID} to job ID {projFinalID}");
+                set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
                 return string.Empty;
             }
+        }
+
+        /// <summary>
+        /// add internal fee invoice to a job
+        /// </summary>
+        /// <param name="xlRow">Active Excel row being processed</param>
+        /// <param name="jobID"></param>
+        /// <param name="vendorName"></param>
+        /// <param name="invNo"></param>
+        /// <param name="invAmt"></param>
+        /// <param name="invDesc"></param>
+        /// <param name="connectionString"></param>
+        /// <returns>Total amount of all internal fees for the job</returns>
+        private float add_invoice_to_internal_fees(dynamic xlRow, int jobID, string vendorName, string invNo, Single invAmt, string invDesc, string connectionString)
+        {
+            float result = 0;
+            string msg = "";
+            string now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            string notes = $"Inv. {invNo}, {invDesc}";
+            string cmdText = "";
+            bool isOK = false;
+
+            // first add internal fee record
+            try
+            {
+                using(SqlConnection conn = new SqlConnection(connectionString))
+                {
+                    cmdText = $"INSERT INTO MLG.POL.tblInternalJobFees (JobID, FeeName, FeeAmount, Notes, CreateDate) "
+                            + $"VALUES ({jobID}, '{vendorName}', {invAmt}, '{notes}', '{now}')";
+
+                    using(SqlCommand cmd = new SqlCommand(cmdText, conn))
+                    {
+                        conn.Open();
+                        int rows = cmd.ExecuteNonQuery();
+                        if(rows == 1)
+                        {
+                            isOK = true;
+                            msg = $"Added internal fee to job ID {jobID}";
+                            Status = msg;
+                            LogIt.LogInfo(msg);
+                        }
+                        else
+                        {
+                            msg = $"Could not add internal fee for invoice {invNo} to job {jobID}";
+                            LogIt.LogError(msg);
+                            Status = msg;
+                            set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
+                        }
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                result = 0;
+                isOK = false;
+                msg = $"Error adding invoice {invNo} to job {jobID}: {ex.Message}";
+                LogIt.LogError(msg);
+                Status = msg;
+                set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
+            }
+
+
+            // next get total of all internal fees for job
+            if(isOK)
+            {
+                try
+                {
+                    using(SqlConnection conn = new SqlConnection(connectionString))
+                    {
+                        cmdText = $"SELECT CAST(SUM(FeeAmount) AS NUMERIC(9,2)) FROM MLG.POL.tblInternalJobFees WHERE JobID = {jobID}";
+                        using(SqlCommand cmd = new SqlCommand(cmdText, conn))
+                        {
+                            conn.Open();
+                            isOK = float.TryParse(cmd.ExecuteScalar().ToString(), out result);
+                            isOK = result != 0;
+                        }
+                    }
+                    if(isOK)
+                    {
+                        msg = $"Got internal fees total for job ID {jobID}";
+                        Status = msg;
+                        LogIt.LogInfo(msg);
+                    }
+                }
+                catch(Exception ex)
+                {
+                    result = 0;
+                    isOK = false;
+                    msg = $"Error getting internal fees total for job {jobID}: {ex.Message}";
+                    LogIt.LogError(msg);
+                    Status = msg;
+                    set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
+                }
+            }
+            return result;
+        }
+
+
+        private bool update_job_internal_fees(dynamic xlRow, int jobID, Single jobInternalFeesTotal, string connectionString)
+        {
+            bool result = false;
+            string msg = "";
+            string cmdText = "";
+            float jobTtlMinusLossAndNegMods = 0;
+
+            // 1: get total price minus loss and neg mods from tbljobs
+            try
+            {
+                using(SqlConnection conn = new SqlConnection(connectionString))
+                {
+                    cmdText = $"SELECT TotalPriceMinusLossAndNegMods FROM MLG.POL.tblJobs WHERE JobID = {jobID}";
+                    using(SqlCommand cmd = new SqlCommand(cmdText, conn))
+                    {
+                        conn.Open();
+                        result = float.TryParse(cmd.ExecuteScalar().ToString(), out jobTtlMinusLossAndNegMods);
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                msg = $"Error getting TotalPriceMinusLossAndNegMods for job {jobID}: {ex.Message}";
+                LogIt.LogError(msg);
+                Status = msg;
+                set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
+                result = false;
+            }
+
+            // 2: update all mods for job if mod type not 3,4
+            if(result)
+            {
+                string now = DateTime.Now.ToShortDateString();
+                try
+                {
+                    using(SqlConnection conn = new SqlConnection(connectionString))
+                    {
+                        cmdText = $"SELECT * FROM MLG.POL.tblProjectEstimateCommon WHERE JobID = {jobID} AND ModuleTypeID NOT IN (3,4)";
+                        using(SqlDataAdapter sda = new SqlDataAdapter(cmdText, conn))
+                        {
+                            using(DataTable dt = new DataTable())
+                            {
+                                sda.Fill(dt);
+                                foreach(DataRow row in dt.Rows)
+                                {
+                                    // needed for calculations
+                                    float estPrice = Convert.ToSingle(row["EstimatePrice"]);
+                                    float ttlEquipMatCost = Convert.ToSingle(row["TotaEquipMaterialsCost"]);
+                                    float ttlLaborCost = Convert.ToSingle(row["TotalLaborCost"]);
+                                    float projEstBurden = Convert.ToSingle(row["ProjEstBurden"]);
+                                    float modCommRate = Convert.ToSingle(row["ModCommRate"]);
+                                    float manDays = Convert.ToSingle(row["ManDays"]);
+
+                                    // fields to update
+                                    float intFeesTtl;
+                                    float gp;
+                                    float salesCommis;
+                                    float gpmd;
+
+
+                                    intFeesTtl = estPrice / jobTtlMinusLossAndNegMods * jobInternalFeesTotal;
+                                    gp = (estPrice - ttlEquipMatCost - ttlLaborCost - projEstBurden - intFeesTtl) / (1 + modCommRate);
+                                    salesCommis = gp * modCommRate;
+                                    gpmd = gp / manDays;
+
+                                    row.BeginEdit();
+                                    row["InternalFeestotal"] = intFeesTtl;
+                                    row["InternalFeesNote"] = $"*** AUTO NOTE: INTERNAL FEES {intFeesTtl.ToString("$#,0.00")} APPLIED {now} ***";
+                                    row["GP"] = gp;
+                                    row["SalesCommission"] = salesCommis;
+                                    row["GPMD"] = gp / manDays;
+                                    row.EndEdit();
+                                }
+                                using(SqlCommandBuilder builder = new SqlCommandBuilder(sda))
+                                {
+                                    sda.UpdateCommand = builder.GetUpdateCommand();
+                                    sda.Update(dt);
+                                    dt.AcceptChanges();
+                                }
+                                msg = $"Updated {dt.Rows.Count} module(s) for job {jobID}";
+                                Status = msg;
+                                LogIt.LogInfo(msg);
+                                result = true;
+                            }
+                        }
+                    }
+                }
+                catch(Exception ex)
+                {
+                    msg = $"Error updating modules for job {jobID}: {ex.Message}";
+                    LogIt.LogError(msg);
+                    Status = msg;
+                    set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
+                    result = false;
+                }
+
+                //try
+                //{
+                //    using(SqlConnection conn = new SqlConnection(connectionString))
+                //    {
+                //        //strSql = "SELECT * FROM tblProjectEstimateCommon WHERE JobID = '" & Me.txtJobID & "' AND ModuleTypeID not in (3,4)"
+                //        //rs("InternalFeesTotal") = rs("EstimatePrice") / txtTotalPriceMinusLossAndNegMods * txtInternalFeesTotal
+                //        //rs("InternalFeesNote") = "*** AUTO NOTE: INTERNAL FEES " & Format(rs("InternalFeesTotal"), "currency") & " APPLIED " & Format(Now, "m/d/yyyy") & " ***"
+                //        //'*********** Re-Calc the GP, Com and GPMD!!!! ***********
+                //        //rs("GP") = (rs("EstimatePrice") - rs("TotaEquipMaterialsCost") - rs("TotalLaborCost") - rs("ProjEstBurden") - rs("InternalFeesTotal")) / (1 + rs("ModCommRate"))
+                //        //rs("SalesCommission") = rs("GP") * rs("ModCommRate")
+                //        //rs("GPMD") = rs("GP") / rs("ManDays")
+
+                //        cmdText = "UPDATE MLG.POL.tblProjectEstimateCommon SET "
+                //        + $"InternalFeesTotal = EstimatePrice / {ttlMinusLossAndNegMods} * {internalFeesTotal}, "
+                //        + $"InternalFeesNote = '*** AUTO NOTE: INTERNAL FEES {internalFeesTotal.ToString("$#,0.00")} APPLIED {DateTime.Now.ToShortDateString()} ***', "
+                //        + $"GP = (EstimatePrice - TotaEquipMaterialsCost - TotalLaborCost - ProjEstBurden - (EstimatePrice / {ttlMinusLossAndNegMods} * {internalFeesTotal})) / (1 + ModCommRate), "
+                //        + $"SalesCommission = ((EstimatePrice - TotaEquipMaterialsCost - TotalLaborCost - ProjEstBurden - (EstimatePrice / {ttlMinusLossAndNegMods} * {internalFeesTotal}))) * ModCommRate, "
+                //        + $"GPMD = (EstimatePrice - TotaEquipMaterialsCost - TotalLaborCost - ProjEstBurden - (EstimatePrice / {ttlMinusLossAndNegMods} * {internalFeesTotal})) / (1 + ModCommRate) / ManDays "
+                //        + $"WHERE JobID = {jobID} AND ModuleTypeID NOT IN (3,4)";
+
+                //        using(SqlCommand cmd = new SqlCommand(cmdText, conn))
+                //        {
+                //            conn.Open();
+                //            int rows = cmd.ExecuteNonQuery();
+                //            msg = $"Updated {rows} module(s) for job {jobID}";
+                //            Status = msg;
+                //            LogIt.LogInfo(msg);
+                //            result = true;
+                //        }
+                //    }
+                //}
+                //catch(Exception ex)
+                //{
+                //    msg = $"Error updating modules for job {jobID}: {ex.Message}";
+                //    LogIt.LogError(msg);
+                //    Status = msg;
+                //    set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
+                //    result = false;
+                //}
+            }
+
+            // 3: update all subcontractor mods for job if mod type not 3,4
+            if(result)
+            {
+                string now = DateTime.Now.ToShortDateString();
+                try
+                {
+                    using(SqlConnection conn = new SqlConnection(connectionString))
+                    {
+                        cmdText = $"SELECT * FROM MLG.POL.tblSubModuleWOSubModule WHERE JobID = {jobID} AND ModuleTypeID NOT IN (3,4)";
+                        using(SqlDataAdapter sda = new SqlDataAdapter(cmdText, conn))
+                        {
+                            using(DataTable dt = new DataTable())
+                            {
+                                sda.Fill(dt);
+
+                                foreach(DataRow row in dt.Rows)
+                                {
+                                    // needed for calculations
+                                    float estPrice = Convert.ToSingle(row["EstimatePrice"]);
+                                    float subCost = Convert.ToSingle(row["SubCost"]);
+                                    float matCost = Convert.ToSingle(row["MATCost"]);
+                                    float subModCommRate = Convert.ToSingle(row["SubModCommRate"]);
+
+                                    // fields to update
+                                    float intFeesTtl;
+                                    float gp;
+                                    float salesCommis;
+
+                                    intFeesTtl = estPrice / jobTtlMinusLossAndNegMods * jobInternalFeesTotal;
+                                    float estGpPlusComm = estPrice - subCost - matCost - intFeesTtl;
+                                    gp = estGpPlusComm / (1 + subModCommRate);
+                                    salesCommis = estGpPlusComm - gp;
+
+                                    row.BeginEdit();
+                                    row["InternalFeestotal"] = intFeesTtl;
+                                    row["InternalFeesNote"] = $"*** AUTO NOTE: INTERNAL FEES {intFeesTtl.ToString("$#,0.00")} APPLIED {now} ***";
+                                    row["GP"] = gp;
+                                    row["SalesCommission"] = salesCommis;
+                                    row.EndEdit();
+                                }
+                                using(SqlCommandBuilder builder = new SqlCommandBuilder(sda))
+                                {
+                                    sda.UpdateCommand = builder.GetUpdateCommand();
+                                    sda.Update(dt);
+                                    dt.AcceptChanges();
+                                }
+                                msg = $"Updated {dt.Rows.Count} subcontractor module(s) for job {jobID}";
+                                Status = msg;
+                                LogIt.LogInfo(msg);
+                                result = true;
+                            }
+                        }
+                    }
+                }
+                catch(Exception ex)
+                {
+                    msg = $"Error updating subcontractor modules for job {jobID}: {ex.Message}";
+                    LogIt.LogError(msg);
+                    Status = msg;
+                    set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
+                    result = false;
+                }
+
+                    //using(SqlConnection conn = new SqlConnection(connectionString))
+                    //{
+                    //    //strSql = "SELECT * FROM tblSubModuleWOSubModule WHERE JobID = '" & Me.txtJobID & "' AND ModuleTypeID not in (3,4)"  '<---- Not to NEg or Loss Mods!!!
+                    //    //rs("InternalFeesTotal") = rs("EstimatePrice") / txtTotalPriceMinusLossAndNegMods * txtInternalFeesTotal
+                    //    //rs("InternalFeesNote") = "*** AUTO NOTE: INTERNAL FEES " & Format(rs("InternalFeesTotal"), "currency") & " APPLIED " & Format(Now, "m/d/yyyy") & " ***"
+                    //    //Est_GP_Plus_Comiss = rs("EstimatePrice") - rs("SubCost") - rs("MATCost") - rs("InternalFeesTotal")
+                    //    //rs("GP") = Est_GP_Plus_Comiss / (1 + rs("SubModCommRate"))
+                    //    //rs("SalesCommission") = Est_GP_Plus_Comiss - rs("GP")
+
+                    //    cmdText = "UPDATE MLG.POL.tblSubModuleWOSubModule SET "
+                    //    + $"InternalFeesTotal = EstimatePrice / {jobTtlMinusLossAndNegMods} * {internalFeesTotal}, "
+                    //    + $"InternalFeesNote = '*** AUTO NOTE: INTERNAL FEES {internalFeesTotal.ToString("$#,0.00")} APPLIED {DateTime.Now.ToShortDateString()} ***', "
+                    //    + $"GP = (EstimatePrice - SubCost - MATCost - (EstimatePrice / {jobTtlMinusLossAndNegMods} * {internalFeesTotal})) / (1 + SubModCommRate), "
+                    //    + $"SalesCommission = (EstimatePrice - SubCost - MATCost - (EstimatePrice / {jobTtlMinusLossAndNegMods} * {internalFeesTotal})) "
+                    //    + $"- ((EstimatePrice - SubCost - MATCost - (EstimatePrice / {jobTtlMinusLossAndNegMods} * {internalFeesTotal})) / (1 + SubModCommRate)) "
+                    //    + $"WHERE JobID = {jobID} AND ModuleTypeID NOT IN (3,4)";
+
+                    //    using(SqlCommand cmd = new SqlCommand(cmdText, conn))
+                    //    {
+                    //        conn.Open();
+                    //        int rows = cmd.ExecuteNonQuery();
+                    //        msg = $"Updated {rows} subcontractor module(s) for job {jobID}";
+                    //        Status = msg;
+                    //        LogIt.LogInfo(msg);
+                    //        result = true;
+                    //    }
+                    //}
+            }
+
+            // 4: update job totals and applied flag
+            if(result)
+            {
+                try
+                {
+                    using(SqlConnection conn = new SqlConnection(connectionString))
+                    {
+                        // InternalFeesTotal
+                        // InternalFeesApplied to true (-1?)
+                        // SumInternalFeesTotalMods??
+                        // SumInternalFeesTotalSubMods??
+                        // SumInternalFeesTotalWOs ??
+                        // SumInternalFeesTotalSubWO ??
+                        cmdText = "UPDATE MLG.POL.tblJobs SET "
+                        + $"InternalFeesTotal = {jobInternalFeesTotal}, SumInternalFeesTotalMods = {jobInternalFeesTotal}, SumInternalFeesTotalSubMods = {jobInternalFeesTotal}, InternalFeesApplied = -1 "
+                        + $"WHERE JobID = {jobID}";
+
+                        using(SqlCommand cmd = new SqlCommand(cmdText, conn))
+                        {
+                            conn.Open();
+                            int rows = cmd.ExecuteNonQuery();
+                            if(rows == 1)
+                            {
+                                msg = $"Updated internal fees totals for job {jobID}";
+                                LogIt.LogInfo(msg);
+                                result = true;
+                            }
+                            else
+                            {
+                                msg = $"Could not update internal fees totals for job {jobID}";
+                                LogIt.LogWarn(msg);
+                                result = false;
+                            }
+                            Status = msg;
+                        }
+                    }
+                }
+                catch(Exception ex)
+                {
+                    msg = $"Error updating modules for job {jobID}: {ex.Message}";
+                    LogIt.LogError(msg);
+                    Status = msg;
+                    set_excel_status(xlRow, "Error", "Couldn't add invoice to job");
+                    result = false;
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Add a vendor bill to quickbooks
+        /// </summary>
+        /// <param name="xlRow">Active Excel row being processed</param>
+        /// <param name="billData">A <see cref="BillData"/> object containing invoice information</param>
+        /// <returns></returns>
+        private bool add_quickbooks_bill(dynamic xlRow, BillData billData)
+        {
+            bool response = false;
+            string msg = "";
+            response = qb.AddStandardVendorBill(billData);
+            if(response)
+            {
+                msg = $"Added invoice {billData.InvoiceNumber} for vendor {billData.VendorFullName} to QuickBooks";
+                Status = msg;
+                LogIt.LogInfo(msg);
+            }
+            else
+            {
+                xlRow.Cells[cols.invNum].Interior.ColorIndex = 3;
+                msg = $"Couldn't add invoice {billData.InvoiceNumber} for vendor {billData.VendorFullName} to QuickBooks: {billData.QBMessage}";
+                Status = msg;
+                LogIt.LogError(msg);
+                set_excel_status(xlRow, billData.QBStatus, billData.QBMessage);
+            }
+            return response;
         }
 
         /// <summary>
@@ -1286,108 +1631,6 @@ namespace InvoiceImport
                 }
             }
             return status;
-        }
-
-        /// <summary>
-        /// calculate due date from supplied invoice date & terms
-        /// </summary>
-        /// <param name="vendor"></param>
-        /// <param name="invoiceDate"></param>
-        /// <param name="terms"></param>
-        /// <returns></returns>
-        private static DateTime get_due_date(string vendor, DateTime invoiceDate, string terms)
-        {
-            terms = terms.ToLower();
-            DateTime dueDate = new DateTime();
-            DateTime nextMo = invoiceDate.AddMonths(1);
-            int days = 30;
-
-            // no terms, use default 30 days
-            if(terms == "")
-            {
-                dueDate = invoiceDate.AddDays(days);
-                LogIt.LogInfo($"Vendor \"{vendor}\" has no terms supplied");
-            }
-
-            // get number of days from terms (ex: Net 30 days)
-            else if(terms.EndsWith("days"))
-            {
-                terms = terms.Replace("net", "").Replace("days", "").Trim();
-                try
-                {
-                    days = int.Parse(terms);
-                }
-                catch
-                {
-                    // do nothing, we already have a default days value
-                }
-                finally
-                {
-                    dueDate = invoiceDate.AddDays(days);
-                }
-            }
-
-            // get particular day of month from terms (ex: Net 10th)
-            else if(terms.EndsWith("th"))
-            {
-                terms = terms.Replace("net", "").Replace("th", "").Trim();
-                try
-                {
-                    days = int.Parse(terms);
-                }
-                catch
-                {
-                    // do nothing, we already have a default days value
-                }
-                finally
-                {
-                    dueDate = new DateTime(nextMo.Year, nextMo.Month, days);
-                }
-            }
-
-            // get particular day of month from terms (ex: Due 10th of mo.)
-            else if(terms.StartsWith("due "))
-            {
-                terms = terms.Replace("due", "").Replace("th of mo", "").Replace(".", "").Trim();
-                try
-                {
-                    days = int.Parse(terms);
-                }
-                catch
-                {
-                    // do nothing, we already have a default days value
-                }
-                finally
-                {
-                    dueDate = new DateTime(nextMo.Year, nextMo.Month, days);
-                }
-            }
-
-            // get number of days from terms (ex: Net 30)
-            else if(terms.StartsWith("net"))
-            {
-                terms = terms.Replace("net", "").Trim();
-                try
-                {
-                    days = int.Parse(terms);
-                }
-                catch
-                {
-                    // do nothing, we already have a default days value
-                }
-                finally
-                {
-                    dueDate = invoiceDate.AddDays(days);
-                }
-            }
-
-            // if none of above terms types, default to 30 days
-            else
-            {
-                dueDate = invoiceDate.AddDays(days);
-                LogIt.LogWarn($"Vendor \"{vendor}\" has unrecognized terms \"{terms}\"");
-            }
-            return dueDate;
         }
 
         // the following is in case we want to show the log on the form.

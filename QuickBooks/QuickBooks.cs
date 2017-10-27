@@ -8,6 +8,7 @@ using System.Xml;
 using System.Xml.Linq;
 using Interop.QBXMLRP2;
 using Aimm.Logging;
+using System.Runtime.InteropServices;
 
 namespace QuickBooks
 {
@@ -74,19 +75,16 @@ namespace QuickBooks
         /// <summary>
         /// Opens QuickBooks connection and starts session
         /// </summary>
+        /// <param name="qbFileName">Full path name of QuickBooks file, or "" to use currently open file</param>
         /// <returns>boolean indicating success</returns>
-        /// <remarks>
-        /// appID not required, send ""
-        /// qbFileName: full path name of QuickBooks file, or "" to use currently open file
-        /// </remarks>
-        public bool Connect()
+        public bool Connect(string qbFileName="")
         {
             try
             {
+                // appID not required, send ""
                 string appID = "";
                 string appName = "AIMM";
                 QBXMLRPConnectionType connType = QBXMLRPConnectionType.localQBD;
-                string qbFileName = "";
                 QBFileMode fileMode = QBFileMode.qbFileOpenDoNotCare;
 
                 OnStatusChanged(new StatusChangedEventArgs("Opening connection to QuickBooks"));

@@ -18,9 +18,13 @@ namespace InvoiceImport
         dynamic xlWorkbook;
         dynamic xlWorksheet;
         dynamic xlRange;
-        //public dynamic xlCell;
-        //public dynamic xlRow;
-        //public dynamic xlCol;
+
+        public enum XlFileFormat
+        {
+            xlOpenXMLWorkbook = 51,
+            xlOpenXMLWorkbookMacroEnabled = 52,
+            xlExcel8 = 56
+        }
 
         private bool workbookOpen = false;
 
@@ -48,6 +52,11 @@ namespace InvoiceImport
         public dynamic WorkBook { get { return xlWorkbook; } }
         public dynamic WorkSheet { get { return xlWorksheet; } }
         public dynamic Range { get { return xlRange; } }
+        public int Rows { get { return xlRange.Rows.Count; } }
+        public int Columns { get { return xlRange.Columns.Count; } }
+        public int ActiveRows { get { return (int)xlApp.WorksheetFunction.CountA(xlRange.Columns(1)); } }
+        public int ActiveColumns { get { return (int)xlApp.WorksheetFunction.CountA(xlRange.Rows(1)); } }
+        public string RangeAddress { get { return xlRange.Address; } }
 
         #endregion
 
@@ -83,6 +92,12 @@ namespace InvoiceImport
                 result = false;
             }
             return result;
+        }
+
+        public bool SaveWorkbookAs(string fileName, XlFileFormat fileFormat = XlFileFormat.xlOpenXMLWorkbook)
+        {
+            xlWorkbook.SaveAs(fileName, fileFormat);
+            return true;
         }
 
         /// <summary>
@@ -145,15 +160,13 @@ namespace InvoiceImport
                 result = CloseWorkbook();
 
             release_objects();
-
             return result;
         }
 
         public bool GetRange(string nameOrAddress, bool select = false)
         {
             bool result = false;
-
-            if(xlApp != null || xlWorkbook != null)
+            if(xlApp != null && xlWorkbook != null)
             {
                 try
                 {
@@ -167,6 +180,39 @@ namespace InvoiceImport
                 catch(Exception ex)
                 {
                     LastError = ex.Message;
+                }
+            }
+            return result;
+        }
+
+        public bool ResizeRange(int rows = 0, int cols = 0)
+        {
+            bool result = false;
+            if(xlApp != null && xlWorkbook != null)
+            {
+                try
+                {
+                    if(rows != 0 & cols != 0)
+                    {
+                        xlRange = xlRange.Resize(rows, cols);
+                        result = true;
+                    }
+                    else if(rows != 0)
+                    {
+                        xlRange = xlRange.Resize(rows);
+                        result = true;
+                    }
+                    else if(cols != 0)
+                    {
+                        xlRange = xlRange.Resize(ColumnCount: cols);
+                        result = true;
+                    }
+
+                }
+                catch(Exception ex)
+                {
+                    LastError = ex.Message;
+                    result = false;
                 }
             }
             return result;
@@ -247,7 +293,7 @@ namespace InvoiceImport
             }
             finally
             {
-            GC.Collect();
+                GC.Collect();
             }
 
         }

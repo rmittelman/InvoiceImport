@@ -104,5 +104,14 @@ namespace InvoiceImport.Properties {
                 return ((string)(this["BillClass"]));
             }
         }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string QuickBooksFile {
+            get {
+                return ((string)(this["QuickBooksFile"]));
+            }
+        }
     }
 }

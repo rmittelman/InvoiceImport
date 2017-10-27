@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Settings>
+  <setting name="SourceFolder" value="Z:\AIMM Automation\Vendor Invoice Import" />
+  <setting name="ShowExcel" value="True" />
+  <setting name="LogFolder" value="Z:\AIMM Automation\Vendor Invoice Import\Logs" />
+  <setting name="ArchiveFolder" value="Z:\AIMM Automation\Vendor Invoice Import\Archive" />
+  <setting name="PdfFolder" value="Z:\AIMM Automation\Vendor Invoice Import\PDFs" />
+  <setting name="ErrorFolder" value="Z:\AIMM Automation\Vendor Invoice Import\Errors" />
+  <setting name="APAcct" value="Accounts Payable" />
+  <setting name="BillClass" value="PPI" />
+  <setting name="QuickBooksFile" value="" />
+</Settings>
