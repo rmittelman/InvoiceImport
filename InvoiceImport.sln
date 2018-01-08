@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aimm.Logging", "Aimm.Loggin
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuickBooks", "QuickBooks\QuickBooks.csproj", "{32F364BA-B3EC-4421-947B-D0ED054A3036}"
 EndProject
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "SetupInvoiceImport", "SetupInvoiceImport\SetupInvoiceImport.vdproj", "{2DDCFC14-258C-4DD1-8617-4E366A7FD914}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,11 @@ Global
 		{32F364BA-B3EC-4421-947B-D0ED054A3036}.Release|Any CPU.Build.0 = Release|Any CPU
 		{32F364BA-B3EC-4421-947B-D0ED054A3036}.Release|x86.ActiveCfg = Release|x86
 		{32F364BA-B3EC-4421-947B-D0ED054A3036}.Release|x86.Build.0 = Release|x86
+		{2DDCFC14-258C-4DD1-8617-4E366A7FD914}.Debug|Any CPU.ActiveCfg = Debug
+		{2DDCFC14-258C-4DD1-8617-4E366A7FD914}.Debug|x86.ActiveCfg = Debug
+		{2DDCFC14-258C-4DD1-8617-4E366A7FD914}.Debug|x86.Build.0 = Debug
+		{2DDCFC14-258C-4DD1-8617-4E366A7FD914}.Release|Any CPU.ActiveCfg = Release
+		{2DDCFC14-258C-4DD1-8617-4E366A7FD914}.Release|x86.ActiveCfg = Release
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

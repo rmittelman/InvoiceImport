@@ -20,7 +20,7 @@ namespace QuickBooks
         private string v;
         public StatusChangedEventArgs(string v)
         {
-            this.v = v;
+            this.Status = v;
         }
         public string Status { get; set; }
     }

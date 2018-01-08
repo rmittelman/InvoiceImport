@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <Settings>
+  <setting name="POLSQL" value ="Data Source=POLSQL;Initial Catalog=MLG;User ID=polsqluser;Password=Pol113388"/>
   <setting name="SourceFolder" value="Z:\AIMM Automation\Vendor Invoice Import" />
   <setting name="ShowExcel" value="True" />
   <setting name="LogFolder" value="Z:\AIMM Automation\Vendor Invoice Import\Logs" />

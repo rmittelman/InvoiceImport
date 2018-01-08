@@ -16,6 +16,7 @@ using Excel = Microsoft.Office.Interop.Excel;
 using System.ComponentModel;
 using System.Drawing;
 using System.Xml;
+using System.Diagnostics;
 
 namespace InvoiceImport
 {
@@ -24,6 +25,8 @@ namespace InvoiceImport
         // used to scroll text box if needed.
         //[DllImport("user32.dll", CharSet = CharSet.Auto)]
         //private static extern int SendMessage(IntPtr hWnd, int wMsg, IntPtr wParam, ref Point lParam);
+
+        String[] args = Environment.GetCommandLineArgs();
 
         public frmImport()
         {
@@ -37,16 +40,17 @@ namespace InvoiceImport
             vendor = 1,
             invType = 2,
             invNum = 3,
-            invDate = 4,
-            jobID = 5,
-            woNum = 6,
-            invAmt = 7,
-            invDesc = 8,
-            vendorID = 9,
-            fullName = 10,
-            expAcct = 11,
-            status = 12,
-            message = 13
+            pages = 4,
+            invDate = 5,
+            jobID = 6,
+            woNum = 7,
+            invAmt = 8,
+            invDesc = 9,
+            vendorID = 10,
+            fullName = 11,
+            expAcct = 12,
+            status = 13,
+            message = 14
         }
 
         enum importTypes
@@ -72,7 +76,11 @@ namespace InvoiceImport
         //private System.IntPtr SB_BOTTOM = (IntPtr)7;
         //private Point pt = new Point();
 
-        string connString = Properties.Settings.Default.POLSQL;
+        private bool isIDE = (Debugger.IsAttached == true);
+        private string settingsPath;
+        private string settingsFile;
+
+        string connString;
 
         // for displaying log
         // private static string newLogLine = "";
@@ -99,7 +107,6 @@ namespace InvoiceImport
         string destPathName = "";
         string logFile = "InvoiceImport.log";
         string logPathName = "";
-        string settingsFile = "";
 
         #endregion
 
@@ -125,9 +132,14 @@ namespace InvoiceImport
             // get settings
             try
             {
-                settingsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Settings.xml");
+                if(isIDE)
+                    settingsPath = Path.GetDirectoryName(Application.ExecutablePath);
+                else
+                    settingsPath = Path.GetDirectoryName(Application.CommonAppDataPath);
+                settingsFile = Path.Combine(settingsPath, "Settings.xml");
                 XmlDocument doc = new XmlDocument();
                 doc.Load(settingsFile);
+                connString = GetSetting(doc, "POLSQL");
                 sourcePath = GetSetting(doc, "SourceFolder");
                 archivePath = GetSetting(doc, "ArchiveFolder");
                 errorPath = GetSetting(doc, "ErrorFolder");
@@ -225,22 +237,21 @@ namespace InvoiceImport
 
         private void btnImport_Click(object sender, EventArgs e)
         {
-            //if(((Button)sender).Name == "btnImportStandard")
-            //    importType = importTypes.standard;
-            //else
-            //    importType = importTypes.stock;
-
             xlPathName = txtExcelFile.Text;
             xlFile = Path.GetFileName(xlPathName);
             string msg = "";
             bool needValidJobId = false;
             bool needValidWO = false;
-            bool needCustInJobId = false;
+            bool needJobIdOrCustInJobId = false;
 
             bool addToAimmWo = ckAddToAIMM.Checked;
             bool addToQB = ckAddToQB.Checked;
             bool addToAimmFees = false;
             bool deferQbEntry = false;
+
+
+            // fix so submit button is disabled unless user picks another workbook
+            btnImportStandard.Enabled = false;
 
             if(addToAimmWo | addToQB)
             {
@@ -311,7 +322,7 @@ namespace InvoiceImport
                                             // Vendor:          Goes into AIMM and QuickBooks; Requires valid JobID, Work Order; PDFs are split
                                             // Stock Out:       Goes into AIMM and QuickBooks (defer QB to end); Requires valid JobID, Work Order; NO PDFs split
                                             // Internal:        Goes into AIMM (as fee) and QuickBooks; Requires valid JobID, no Work Order; PDFs are split
-                                            // Stock In/Svcs:   Goes into QuickBooks; Requires valid QB customer in JobID column; PDFs are split
+                                            // Stock In/Svcs:   Goes into QuickBooks; Requires JobID or valid QB customer in JobID column; PDFs are split
                                             string invType = (xlRow.Cells[cols.invType].Value ?? "").ToString().Trim();
                                             switch(invType)
                                             {
@@ -320,7 +331,7 @@ namespace InvoiceImport
                                                     addToAimmFees = false;
                                                     needValidJobId = true;
                                                     needValidWO = true;
-                                                    needCustInJobId = false;
+                                                    needJobIdOrCustInJobId = false;
                                                     deferQbEntry = false;
                                                     break;
                                                 case "Stock Out":
@@ -328,7 +339,7 @@ namespace InvoiceImport
                                                     addToAimmFees = false;
                                                     needValidJobId = true;
                                                     needValidWO = true;
-                                                    needCustInJobId = false;
+                                                    needJobIdOrCustInJobId = false;
                                                     deferQbEntry = true;
                                                     break;
                                                 case "Internal":
@@ -336,7 +347,7 @@ namespace InvoiceImport
                                                     addToAimmFees = true;
                                                     needValidJobId = true;
                                                     needValidWO = false;
-                                                    needCustInJobId = false;
+                                                    needJobIdOrCustInJobId = false;
                                                     deferQbEntry = false;
                                                     break;
                                                 case "Stock In/Svcs":
@@ -344,7 +355,7 @@ namespace InvoiceImport
                                                     addToAimmFees = false;
                                                     needValidJobId = false;
                                                     needValidWO = false;
-                                                    needCustInJobId = true;
+                                                    needJobIdOrCustInJobId = true;
                                                     deferQbEntry = false;
                                                     break;
 
@@ -400,11 +411,6 @@ namespace InvoiceImport
                                                     xlCell = xlRow.Cells[cols.jobID];
                                                     string jid = (xlCell.Value ?? "").ToString().Trim();
 
-                                                    //// can skip AIMM Job/WO/Customer validation IF:
-                                                    ////  addToAIMM checkbox is OFF
-                                                    ////  PO Number/Job ID is "Stock"
-                                                    //bool skipAimmValidation = (!addToAimm && jid.ToLower() == "stock");
-
                                                     if(!needValidJobId || int.TryParse(jid, out jobID))
                                                     {
                                                         int jobStatus = 0;
@@ -413,7 +419,7 @@ namespace InvoiceImport
                                                             jobStatus = (int)get_job_status(jobID, connString);
                                                         else
                                                         {
-                                                            if(needCustInJobId && jid == "")
+                                                            if(needJobIdOrCustInJobId && jid == "")
                                                                 jobStatus = -1;
                                                         }
                                                         isValidJobID = (jobStatus != -1);
@@ -443,9 +449,11 @@ namespace InvoiceImport
                                                                     }
                                                                     if(vendorIdValidOrNotNeeded)
                                                                     {
-                                                                        // validate customer if not skipping AIMM validation
+
+                                                                        // if needJobIdOrCustInJobId and job id not numeric,
+                                                                        // use it as customer. otherwise get customer from AIMM
                                                                         string jobCust = "";
-                                                                        if(needCustInJobId)
+                                                                        if(needJobIdOrCustInJobId && !int.TryParse(jid, out jobID))
                                                                             jobCust = jid;
                                                                         else
                                                                             jobCust = get_job_customer(jobID, connString);
@@ -574,15 +582,16 @@ namespace InvoiceImport
                                                             isValid = false;
                                                             xlCell.Interior.ColorIndex = 3;
                                                             if(needValidJobId)
-                                                                msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\", job ID \"{jobID}\" is closed, cancelled or missing from database";
-                                                            else if(needCustInJobId)
+                                                                msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\", job ID \"{jobID}\" is missing from database";
+                                                                // use this instead if we are skipping closed/cancelled jobs: msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\", job ID \"{jobID}\" is closed, cancelled or missing from database";
+                                                            else if(needJobIdOrCustInJobId)
                                                                 msg = $"Invoice {invNo} for vendor \"{vendor}\" in file \"{xlFile}\" is missing customer name";
 
                                                             LogIt.LogError(msg);
 
                                                             if(needValidJobId)
                                                                 msg = "Job closed, cancelled or not found in database";
-                                                            else if(needCustInJobId)
+                                                            else if(needJobIdOrCustInJobId)
                                                                 msg = "Invoice missing customer name";
 
                                                             set_excel_status(xlRow, "Error", msg);
@@ -727,7 +736,7 @@ namespace InvoiceImport
 
                 // make a sub-folder for today's date, use that for PDFs
                 var subFolder = DateTime.Today.ToString("yyyy-MM-dd");
-                pdfDestPath = Path.Combine(pdfDestPath, subFolder);
+                pdfDestPath = Path.Combine(txtPDFFolder.Text, subFolder);
 
                 // if dest folder exists delete contents, otherwise create
                 if(Directory.Exists(pdfDestPath))
@@ -749,10 +758,10 @@ namespace InvoiceImport
                     Directory.CreateDirectory(pdfDestPath);
                 }
 
+                // get list of invoice numbers from xl document.
+                xlPathName = txtExcelFile.Text;
                 if(xlPathName.Trim() != "")
                 {
-                    // get list of invoice numbers from xl document.
-                    xlPathName = txtExcelFile.Text;
                     var xlFile = Path.GetFileName(xlPathName);
                     if(open_excel(xlPathName))
                     {
@@ -764,7 +773,7 @@ namespace InvoiceImport
                             Status = msg;
                             LogIt.LogInfo(msg);
 
-                            var invoiceList = new List<string>();
+                            var invoiceList = new List<KeyValuePair<string, int>>();
                             try
                             {
                                 // loop thru each invoice row on worksheet, collect invoice numbers
@@ -782,7 +791,12 @@ namespace InvoiceImport
                                     // Stock In/Svcs:   Goes into QuickBooks; Requires valid QB customer in JobID column; PDFs are split
                                     string invType = (xlRow.Cells[cols.invType].Value ?? "").ToString().Trim();
                                     if(invType != "Stock Out")
-                                        invoiceList.Add($"{vendor}_Invoice_{invNo}");
+                                    {
+                                        int pages = 1;
+                                        var pgs = (xlRow.cells[cols.pages].Value ?? "1").ToString().Trim();
+                                        int.TryParse(pgs, out pages);
+                                        invoiceList.Add(new KeyValuePair<string, int>($"{vendor}_Invoice_{invNo}", pages));
+                                    }
                                 }
                                 var isOk = oXl.CloseWorkbook();
                             }
@@ -888,7 +902,7 @@ namespace InvoiceImport
         /// <param name="destFolder">path to destination folder for split PDFs</param>
         /// <param name="invoiceList">list of file names to apply to split files</param>
         /// <returns>boolean indicating success</returns>
-        private bool split_pdfs(string bigPdfFile, string destFolder, List<string> invoiceList)
+        private bool split_pdfs(string bigPdfFile, string destFolder, List<KeyValuePair<string, int>> invoiceList)
         {
             var pdf = Path.GetFileName(bigPdfFile);
             var isOK = false;
@@ -897,18 +911,28 @@ namespace InvoiceImport
             {
                 using(PdfReader reader = new PdfReader(bigPdfFile))
                 {
-                    isOK = reader.NumberOfPages == invoiceList.Count;
+                    // make sure pdf has right number of pages
+                    int xlPages = invoiceList.Sum(inv => inv.Value);
+                    int pdfPages = reader.NumberOfPages;
+                    isOK = xlPages == pdfPages;
                     if(isOK)
                     {
-                        for(int pg = 0; pg < reader.NumberOfPages; pg++)
+                        int pdfPage = 0;
+                        for(int inv = 0; inv < invoiceList.Count(); inv++)
                         {
-                            destFile = $"{invoiceList[pg]}.pdf";
+                            destFile = $"{invoiceList[inv].Key}.pdf";
+                            int pages = invoiceList[inv].Value;
                             destPathName = Path.Combine(destFolder, destFile);
                             using(Document document = new Document())
                             {
                                 copy = new PdfCopy(document, new FileStream(destPathName, FileMode.Create));
                                 document.Open();
-                                copy.AddPage(copy.GetImportedPage(reader, pg + 1));
+
+                                for(int pg = 0; pg < pages; pg++)
+                                {
+                                    pdfPage++;
+                                    copy.AddPage(copy.GetImportedPage(reader, pdfPage));
+                                }
                                 document.Close();
                             }
                         }
@@ -1606,10 +1630,15 @@ namespace InvoiceImport
                             {
                                 var record = (IDataRecord)reader;
                                 var jobStatus = (int)record[0];
-                                if(jobStatus != 7 & jobStatus != 11)
-                                {
-                                    status = jobStatus;
-                                }
+
+                                // use this if any job status is ok to process
+                                status = jobStatus;
+
+                                // use this if we are considering closed or cancelled as invalid job statuses
+                                //if(jobStatus != 7 & jobStatus != 11)
+                                //{
+                                //    status = jobStatus;
+                                //}
                             }
                         }
                     }
